@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Footer from './components/Footer/Footer.vue'
 import Logo from './components/Logo.vue'
 import FogCanvas from './components/FogCanvas.vue'
 import CampMap from './components/CampMap.vue'
@@ -7,13 +8,13 @@ import CampMap from './components/CampMap.vue'
 <template>
   <FogCanvas />
 
-  <div class="app-container">
-    <div class="page">
-      <Logo />
-      <CampMap />
-      <!-- Todo <impressum /> -->
-    </div>
+  <div class="page">
+    <Logo />
+
+    <router-view />
   </div>
+
+  <Footer />
 </template>
 
 <style scoped>

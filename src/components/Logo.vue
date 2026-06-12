@@ -1,6 +1,16 @@
+<script setup lang="ts">
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const goHome = () => {
+  router.push('/')
+}
+</script>
+
 <template>
   <div class="scene">
-    <div class="planet">
+    <div class="planet" @click="goHome">
       <div class="crater c1"></div>
       <div class="crater c2"></div>
       <div class="crater c3"></div>
