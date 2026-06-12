@@ -1,10 +1,3 @@
-<script setup lang="ts">
-import Cookie from './components/CookieConsent/CookieConsent.vue'
-import Footer from './components/Footer/Footer.vue'
-import Logo from './components/Logo.vue'
-import FogCanvas from './components/FogCanvas.vue'
-</script>
-
 <template>
   <FogCanvas />
 
@@ -13,12 +6,18 @@ import FogCanvas from './components/FogCanvas.vue'
   <div class="page">
     <Logo />
 
-    <!-- WICHTIG: Router Pages -->
     <router-view />
   </div>
 
   <Footer />
 </template>
+
+<script setup lang="ts">
+import Cookie from './components/CookieConsent/CookieConsent.vue'
+import Footer from './components/Footer/Footer.vue'
+import Logo from './components/Logo.vue'
+import FogCanvas from './components/FogCanvas.vue'
+</script>
 
 <style scoped>
 :global(html, body) {
@@ -30,18 +29,11 @@ import FogCanvas from './components/FogCanvas.vue'
   overflow-x: hidden;
 }
 
+/* 🔧 NUR ABSTAND FIX — sonst alles gleich */
 .page {
-  min-height: 100vh;
   width: 100%;
-  background: transparent;
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-
-  padding: 4vh 4vw;
-  box-sizing: border-box;
-  position: relative;
-  z-index: 1;
+  min-height: auto; /* wichtig */
+  display: block;
+  padding: 0;
 }
 </style>

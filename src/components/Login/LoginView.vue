@@ -8,9 +8,7 @@ const email = ref('')
 const password = ref('')
 
 const login = () => {
-  // Fake login → später ersetzen
   console.log('Login:', email.value, password.value)
-
   router.push('/')
 }
 </script>
@@ -29,37 +27,91 @@ const login = () => {
 </template>
 
 <style scoped>
+/* 🌍 WRAPPER (RESPONSIVE CENTERING) */
 .login-wrapper {
-  height: 35vh;
+  width: 100%;
+  min-height: 70vh;
+  min-height: 70dvh;
+
   display: flex;
   justify-content: center;
   align-items: center;
+
+  padding: 4%;
+  box-sizing: border-box;
   background: transparent;
 }
 
+/* 🧠 CARD (FLUID SCALE) */
 .login-card {
-  padding: 2rem;
+  width: 80%;
+  max-width: 360px;
+
+  padding: 6%;
   border-radius: 12px;
+
   background: rgba(0, 0, 0, 0.6);
   color: white;
+
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  width: 300px;
+
+  gap: 4%;
+
+  box-sizing: border-box;
 }
 
+/* ✍️ TITLE */
+.login-card h1 {
+  font-size: clamp(1.4rem, 5vw, 2rem);
+  margin: 0;
+}
+
+/* 🧾 INPUTS */
 input {
-  padding: 0.5rem;
-  border-radius: 6px;
+  width: 100%;
+
+  padding: 3%;
+  border-radius: 8px;
   border: none;
+
+  font-size: 1rem;
+
+  box-sizing: border-box;
 }
 
+/* 🔘 BUTTON */
 button {
-  padding: 0.6rem;
+  width: 100%;
+
+  padding: 3%;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
+
   background: #2aa87a;
   color: white;
+
   cursor: pointer;
+
+  font-size: 1rem;
+
+  transition:
+    transform 0.15s ease,
+    filter 0.15s ease;
+}
+
+/* interaction */
+button:hover,
+button:active {
+  transform: scale(1.03);
+  filter: brightness(1.1);
+}
+
+/* 📱 MOBILE FINE TUNING */
+@media (max-width: 600px) {
+  .login-card {
+    width: 90%;
+    padding: 7%;
+  }
 }
 </style>
