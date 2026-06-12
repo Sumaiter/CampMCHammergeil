@@ -1,16 +1,17 @@
 <script setup lang="ts">
+import Cookie from './components/CookieConsent/CookieConsent.vue'
 import Footer from './components/Footer/Footer.vue'
 import Logo from './components/Logo.vue'
 import FogCanvas from './components/FogCanvas.vue'
-import CampMap from './components/CampMap.vue'
 </script>
 
 <template>
   <FogCanvas />
 
+  <Cookie />
+
   <div class="page">
     <Logo />
-
     <router-view />
   </div>
 

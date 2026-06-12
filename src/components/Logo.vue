@@ -1,19 +1,34 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const warping = ref(false)
 
 const goHome = () => {
-  router.push('/')
+  const el = document.querySelector('.planet')
+  if (!el) return
+
+  el.classList.add('warp')
+
+  setTimeout(() => {
+    router.push('/')
+  }, 200)
 }
 </script>
 
 <template>
   <div class="scene">
-    <div class="planet" @click="goHome">
+    <div class="planet" @click="goHome" :class="{ warp: warping }">
       <div class="crater c1"></div>
       <div class="crater c2"></div>
       <div class="crater c3"></div>
+      <div class="crater c4"></div>
+      <div class="crater c5"></div>
+      <div class="crater c6"></div>
+      <div class="crater c7"></div>
+      <div class="crater c8"></div>
+      <div class="crater c9"></div>
       <GlitchedElement>
         <p class="metal">Camp MC Hammergeil</p>
       </GlitchedElement>
@@ -33,6 +48,15 @@ const goHome = () => {
 
 /* 🌍 PLANET */
 .planet {
+  cursor: pointer;
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    filter 0.25s ease;
+
+  will-change: transform;
+
   width: 60vw;
   max-width: 220px;
   height: 60vw;
@@ -59,6 +83,25 @@ const goHome = () => {
     0 0 8vw rgba(0, 255, 180, 0.2);
 
   animation: float 6s ease-in-out infinite;
+}
+
+/* 👆 Hover Effekt */
+.planet:hover {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 6vw rgba(120, 255, 200, 0.6),
+    0 0 12vw rgba(0, 255, 180, 0.4);
+  filter: brightness(1.1);
+}
+
+/* 👇 Click Feedback */
+.planet:active {
+  transform: scale(0.97);
+  filter: brightness(0.9);
+}
+
+.planet.warp {
+  animation: warpOut 0.6s ease forwards;
 }
 
 /* 🎸 TEXT */
@@ -108,7 +151,42 @@ const goHome = () => {
   top: 35%;
   left: 55%;
 }
-
+.c4 {
+  width: 6%;
+  height: 6%;
+  top: 20%;
+  left: 60%;
+}
+.c5 {
+  width: 7%;
+  height: 7%;
+  top: 70%;
+  left: 30%;
+}
+.c6 {
+  width: 5%;
+  height: 5%;
+  top: 45%;
+  left: 20%;
+}
+.c7 {
+  width: 9%;
+  height: 9%;
+  top: 25%;
+  left: 40%;
+}
+.c8 {
+  width: 4.5%;
+  height: 4.5%;
+  top: 60%;
+  left: 50%;
+}
+.c9 {
+  width: 6.5%;
+  height: 6.5%;
+  top: 80%;
+  left: 60%;
+}
 @keyframes float {
   0%,
   100% {
