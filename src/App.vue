@@ -12,6 +12,8 @@ import FogCanvas from './components/FogCanvas.vue'
 
   <div class="page">
     <Logo />
+
+    <!-- WICHTIG: Router Pages -->
     <router-view />
   </div>
 

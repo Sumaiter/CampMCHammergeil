@@ -6,21 +6,28 @@ const router = useRouter()
 const warping = ref(false)
 
 const goHome = () => {
-  const el = document.querySelector('.planet')
-  if (!el) return
-
   warping.value = true
 
   setTimeout(() => {
     router.push('/')
   }, 200)
 }
+
+const goLogin = () => {
+  router.push('/login')
+}
 </script>
 
 <template>
   <div class="scene">
+    <!-- 🛰️ SATELLITE LOGIN -->
+    <div class="satellite" @click.stop="goLogin">
+      🛰️
+      <span class="sat-label">LOGIN</span>
+    </div>
+
+    <!-- 🌍 PLANET -->
     <div class="planet" @click="goHome" :class="{ warp: warping }">
-      <!-- 🔥 flame aura layer -->
       <div class="flame-aura"></div>
 
       <div class="crater c1"></div>
@@ -47,6 +54,7 @@ const goHome = () => {
   align-items: center;
   padding-top: 5vh;
   padding-bottom: 3vh;
+  position: relative;
 }
 
 /* 🌍 PLANET */
@@ -76,7 +84,7 @@ const goHome = () => {
   animation: float 6s ease-in-out infinite;
 }
 
-/* 🔥 MAIN FLAME AURA (KAMIN-EFFEKT) */
+/* 🔥 FLAME AURA */
 .flame-aura {
   position: absolute;
   inset: -22%;
@@ -84,7 +92,6 @@ const goHome = () => {
   pointer-events: none;
   z-index: -1;
 
-  /* 🔥 unruhiger Flammenring */
   background:
     radial-gradient(circle at 30% 20%, rgba(120, 255, 200, 0.35), transparent 45%),
     radial-gradient(circle at 70% 30%, rgba(0, 255, 160, 0.28), transparent 50%),
@@ -99,52 +106,6 @@ const goHome = () => {
   animation:
     flameWobble 2s infinite ease-in-out,
     flameFlicker 5s infinite ease-in-out;
-}
-
-@keyframes flameWobble {
-  0% {
-    transform: scale(0.98) rotate(0deg);
-  }
-
-  25% {
-    transform: scale(1.02) rotate(0.8deg) translateY(-1px);
-  }
-
-  50% {
-    transform: scale(1.05) rotate(-0.6deg) translateY(1px);
-  }
-
-  75% {
-    transform: scale(1.03) rotate(0.4deg) translateY(-2px);
-  }
-
-  100% {
-    transform: scale(0.99) rotate(0deg);
-  }
-}
-@keyframes flameFlicker {
-  0%,
-  100% {
-    opacity: 0.65;
-    filter: blur(16px) brightness(1);
-  }
-
-  50% {
-    opacity: 0.95;
-    filter: blur(20px) brightness(1.25);
-  }
-}
-/* subtle inner glow pulse */
-.flame-aura::after {
-  content: '';
-  position: absolute;
-  inset: -10%;
-  border-radius: 50%;
-
-  background: radial-gradient(circle, rgba(120, 255, 200, 0.2), transparent 60%);
-
-  filter: blur(10px);
-  animation: innerPulse 2.5ss infinite ease-in-out;
 }
 
 /* TEXT */
@@ -171,7 +132,6 @@ const goHome = () => {
     inset 0.2vw 0.2vw 0.4vw rgba(255, 255, 255, 0.08);
 }
 
-/* crater positions */
 .c1 {
   width: 12%;
   height: 12%;
@@ -227,36 +187,58 @@ const goHome = () => {
   left: 60%;
 }
 
-/* 🔥 KAMIN FLACKERN */
-@keyframes flameFlicker {
-  0%,
-  100% {
-    opacity: 0.6;
-    transform: scale(0.98);
-    filter: blur(16px) brightness(1);
-  }
+/* 🛰️ SATELLITE LOGIN */
+.satellite {
+  position: absolute;
 
-  50% {
-    opacity: 0.95;
-    transform: scale(1.03);
-    filter: blur(18px) brightness(1.3);
-  }
+  top: 0%;
+  right: 0%;
+
+  font-size: 1.8rem;
+
+  cursor: pointer;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  user-select: none;
+
+  z-index: 20;
 }
 
-/* inner glow breathing */
-@keyframes innerPulse {
-  0%,
-  100% {
-    opacity: 0.3;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.6;
-    transform: scale(1.05);
-  }
+/* glow */
+.satellite::before {
+  content: '';
+  position: absolute;
+  width: 60px;
+  height: 60px;
+
+  background: radial-gradient(circle, rgba(0, 255, 160, 0.25), transparent 60%);
+  border-radius: 50%;
+
+  z-index: -1;
+
+  transform: translate(-10px, -10px);
 }
 
-/* FLOAT */
+/* label */
+.sat-label {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.8);
+
+  margin-top: 4px;
+
+  text-shadow: 0 0 6px rgba(0, 255, 160, 0.5);
+}
+
+/* hover */
+.satellite:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 8px rgba(0, 255, 160, 0.6));
+}
+
+/* ANIMATIONS */
 @keyframes float {
   0%,
   100% {
@@ -264,6 +246,30 @@ const goHome = () => {
   }
   50% {
     transform: translateY(-2vh);
+  }
+}
+
+@keyframes flameWobble {
+  0% {
+    transform: scale(0.98) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.05) rotate(-0.6deg);
+  }
+  100% {
+    transform: scale(0.99) rotate(0deg);
+  }
+}
+
+@keyframes flameFlicker {
+  0%,
+  100% {
+    opacity: 0.6;
+    filter: blur(16px);
+  }
+  50% {
+    opacity: 0.95;
+    filter: blur(18px);
   }
 }
 </style>
