@@ -31,8 +31,8 @@
       </p>
 
       <p>
-        Anbieter ist die :contentReference[oaicite:1]{index=1}, 101 Townsend St, San Francisco, CA
-        94107, USA.
+        Anbieter ist die <strong>Cloudflare, Inc.</strong> (Cloudflare), 101 Townsend St, San
+        Francisco, CA 94107, USA.
       </p>
 
       <p>
@@ -48,7 +48,14 @@
 
       <p>
         Weitere Informationen findest du in der Datenschutzerklärung von Cloudflare:
-        https://www.cloudflare.com/privacypolicy/
+        <a
+          href="https://www.cloudflare.com/privacypolicy/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="color: white; text-decoration: underline"
+        >
+          Cloudflare Datenschutzerklärung
+        </a>
       </p>
     </section>
 
