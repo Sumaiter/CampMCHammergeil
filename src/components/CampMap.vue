@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import festivalImg from '../pics/festival.png'
 
+const router = useRouter()
 const campStartZelt = ref('')
 const campStartFestival = ref('')
 
@@ -72,6 +74,10 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(interval)
 })
+
+const goShop = () => {
+  router.push('/shop')
+}
 </script>
 
 <template>
@@ -104,6 +110,7 @@ onUnmounted(() => {
 
     <!-- Zelt -->
     <span class="tent">🏕️</span>
+    <span class="shop" @click.stop="goShop">🛒</span>
 
     <p v-if="campStartZelt" class="countdown start">
       {{ campStartZelt }}
@@ -143,6 +150,24 @@ onUnmounted(() => {
 
 .tent {
   top: 200px;
+}
+
+.shop {
+  position: absolute;
+  top: 218px; /* gleiche Höhe wie Zelt */
+  left: calc(50% + 65px); /* rechts daneben */
+  transform: translateX(-50%) scale(0.5);
+
+  font-size: 4rem; /* gleiche Basis wie andere Emojis */
+  z-index: 5;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .shop {
+    left: calc(50% + 55px);
+    transform: translateX(-50%) scale(0.45);
+  }
 }
 
 /* Festival */
