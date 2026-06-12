@@ -4,11 +4,11 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-const email = ref('')
+const user = ref('')
 const password = ref('')
 
 const login = () => {
-  console.log('Login:', email.value, password.value)
+  console.log('Login:', user.value, password.value)
   router.push('/')
 }
 </script>
@@ -18,7 +18,7 @@ const login = () => {
     <div class="login-card">
       <h1>Login</h1>
 
-      <input v-model="email" placeholder="E-Mail" />
+      <input v-model="user" placeholder="User" />
       <input v-model="password" type="password" placeholder="Passwort" />
 
       <button @click="login">Login</button>

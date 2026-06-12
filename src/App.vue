@@ -3,13 +3,14 @@
 
   <Cookie />
 
-  <div class="page">
-    <Logo />
+  <div class="app-layout">
+    <div class="page">
+      <Logo />
+      <router-view />
+    </div>
 
-    <router-view />
+    <Footer />
   </div>
-
-  <Footer />
 </template>
 
 <script setup lang="ts">
@@ -20,20 +21,23 @@ import FogCanvas from './components/FogCanvas.vue'
 </script>
 
 <style scoped>
-:global(html, body) {
+:global(html, body, #app) {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   background: #111;
   overflow-x: hidden;
 }
 
-/* 🔧 NUR ABSTAND FIX — sonst alles gleich */
 .page {
+  flex: 1;
   width: 100%;
-  min-height: auto; /* wichtig */
-  display: block;
-  padding: 0;
+}
+
+.app-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 </style>
