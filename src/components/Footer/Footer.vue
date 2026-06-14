@@ -1,18 +1,25 @@
+<script setup lang="ts">
+import { routerHelper } from '@/router/routerHelper'
+import { RoutePath } from '@/router/routePath'
+const year = new Date().getFullYear()
+</script>
+
 <template>
   <footer class="footer">
     <div class="footer-inner">
       <p class="brand">Camp MC Hammergeil</p>
       <div class="links">
-        <RouterLink to="/impressum">Impressum</RouterLink> <span class="dot">•</span>
-        <RouterLink to="/datenschutz">Datenschutz</RouterLink>
+        <span @click="routerHelper.goTo(RoutePath.Imprint)">Impressum</span>
+        <span class="dot">•</span>
+        <span @click="routerHelper.goTo(RoutePath.PrivacyPolicy)">Datenschutz</span>
+        <span class="dot">•</span>
+        <span @click="routerHelper.goTo(RoutePath.Credits)">Quellen & Bildrechte</span>
       </div>
       <p class="copy">© {{ year }}</p>
     </div>
   </footer>
 </template>
-<script setup lang="ts">
-const year = new Date().getFullYear()
-</script>
+
 <style scoped lang="scss">
 /* 🌍 FOOTER WRAPPER */
 .footer {

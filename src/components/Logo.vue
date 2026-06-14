@@ -2,22 +2,20 @@
 import { ref } from 'vue'
 import { routerHelper } from '@/router/routerHelper'
 import { RoutePath } from '@/router/routePath'
-
-const warping = ref(false)
 </script>
 
 <template>
   <div class="scene">
     <!-- 🛰️ HUD -->
     <div class="hud">
-      <div class="satellite" @click.stop="routerHelper.goTo(RoutePath.Login)">
+      <div class="satellite" @click="routerHelper.goTo(RoutePath.Login)">
         🛰️
         <span class="sat-label">LOGIN</span>
       </div>
     </div>
     <!-- 🌍 CENTER -->
     <div class="center">
-      <div class="planet" @click="routerHelper.goTo(RoutePath.Home)" :class="{ warp: warping }">
+      <div class="planet" @click="routerHelper.goTo(RoutePath.Home)">
         <div class="flame-aura"></div>
 
         <div class="craters">
