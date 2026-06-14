@@ -17,26 +17,6 @@ class RouterHelper {
     const location: RouteLocationRaw = query ? { path, query } : path
     return router.replace(location)
   }
-
-  //Einen Schritt zurück in der Browser-History.
-  back(): void {
-    router.back()
-  }
-
-  // Einen Schritt vor in der Browser-History.
-  forward(): void {
-    router.forward()
-  }
-
-  // Gibt den aktuell aktiven Pfad zurück.
-  current(): string {
-    return router.currentRoute.value.path
-  }
-
-  // Prüft, ob die übergebene Route gerade aktiv ist.
-  is(path: RoutePath): boolean {
-    return router.currentRoute.value.path === path
-  }
 }
 
 // Singleton-Instanz – einfach importieren und nutzen:

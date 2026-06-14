@@ -71,7 +71,7 @@ const warping = ref(false)
     user-select: none;
 
     .sat-label {
-      font-size: 0.65rem;
+      font-size: 1rem;
       color: rgba(255, 255, 255, 0.85);
     }
   }
