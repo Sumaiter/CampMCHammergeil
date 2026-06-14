@@ -15,16 +15,16 @@
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .content {
   max-width: 700px;
   margin: 0 auto;
   padding-top: 5vh;
   text-align: center;
   color: white;
-}
 
-h1 {
-  color: #78ffc8;
+  h1 {
+    color: #78ffc8;
+  }
 }
 </style>

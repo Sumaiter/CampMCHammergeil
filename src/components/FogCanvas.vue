@@ -79,7 +79,7 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 canvas {
   position: fixed;
   inset: 0;

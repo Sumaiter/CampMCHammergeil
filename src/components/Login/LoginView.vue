@@ -1,16 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
+import { routerHelper } from '@/router/routerHelper'
+import { RoutePath } from '@/router/routePath'
 
 const user = ref('')
 const password = ref('')
-
-const login = () => {
-  console.log('Login:', user.value, password.value)
-  router.push('/')
-}
 </script>
 
 <template>
@@ -21,12 +15,12 @@ const login = () => {
       <input v-model="user" placeholder="User" />
       <input v-model="password" type="password" placeholder="Passwort" />
 
-      <button @click="login">Login</button>
+      <button @click="routerHelper.goTo(RoutePath.Login)">Login</button>
     </div>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* 🌍 WRAPPER (RESPONSIVE CENTERING) */
 .login-wrapper {
   width: 100%;

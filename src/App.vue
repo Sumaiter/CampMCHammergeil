@@ -8,7 +8,6 @@
       <Logo />
       <router-view />
     </div>
-
     <Footer />
   </div>
 </template>
@@ -20,7 +19,7 @@ import Logo from './components/Logo.vue'
 import FogCanvas from './components/FogCanvas.vue'
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 :global(html, body, #app) {
   margin: 0;
   padding: 0;

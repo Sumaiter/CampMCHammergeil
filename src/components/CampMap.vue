@@ -1,18 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { routerHelper } from '@/router/routerHelper'
+import { RoutePath } from '@/router/routePath'
 import festivalImg from '../pics/festival.png'
 
-const router = useRouter()
 const campStartZelt = ref('')
 const campStartFestival = ref('')
 
 const startDateZelt = new Date('2026-06-05T00:00:00') // ende von rar 2026
 const endDateZelt = new Date('2027-06-02T00:00:00')
 const endDateFestival = new Date('2027-06-04T00:00:00')
-// const endDateFestival = new Date('2026-06-20T00:00:00')
-// const endDateFestival = new Date('2026-06-12T00:00:00')
-// const endDateFestival = new Date('2026-06-06T00:00:00')
 
 let interval: number
 
@@ -74,16 +71,12 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(interval)
 })
-
-const goShop = () => {
-  router.push('/shop')
-}
 </script>
 
 <template>
   <div class="map-wrapper">
     <!-- Haus -->
-    <span class="house">🏠</span>
+    <span class="campMapIcons house">🏠</span>
 
     <!-- Linie -->
     <svg class="line" viewBox="0 0 100 400" preserveAspectRatio="none">
@@ -109,8 +102,8 @@ const goShop = () => {
     </div>
 
     <!-- Zelt -->
-    <span class="tent">🏕️</span>
-    <span class="shop" @click.stop="goShop">🛒</span>
+    <span class="campMapIcons tent">🏕️</span>
+    <span class="shop" @click.stop="routerHelper.goTo(RoutePath.Shop)">🛒</span>
 
     <p v-if="campStartZelt" class="countdown start">
       {{ campStartZelt }}
@@ -125,111 +118,108 @@ const goShop = () => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .map-wrapper {
   position: relative;
   width: 100%;
   max-width: 600px;
   height: 420px;
   margin: 0 auto;
-}
+  /* Haus + Zelt */
 
-/* Haus + Zelt */
-.house,
-.tent {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 4rem;
-  z-index: 5;
-}
+  /* Auto immer ganz oben */
+  .car {
+    position: absolute;
+    z-index: 10;
 
-.house {
-  top: 20px;
-}
+    font-size: 1.8rem;
+    pointer-events: none;
 
-.tent {
-  top: 200px;
-}
-
-.shop {
-  position: absolute;
-  top: 218px; /* gleiche Höhe wie Zelt */
-  left: calc(50% + 65px); /* rechts daneben */
-  transform: translateX(-50%) scale(0.5);
-
-  font-size: 4rem; /* gleiche Basis wie andere Emojis */
-  z-index: 5;
-  cursor: pointer;
-}
-
-@media (max-width: 600px) {
-  .shop {
-    left: calc(50% + 55px);
-    transform: translateX(-50%) scale(0.45);
+    transform: translate(-50%, -50%);
   }
-}
 
-/* Festival */
-.festival {
-  position: absolute;
-  top: 340px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4rem;
-  z-index: 5;
-}
+  .line {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 400px;
+    top: 60px;
 
-/* Linie */
-.line {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 120px;
-  height: 400px;
-  top: 60px;
+    z-index: 1;
+    pointer-events: none;
+  }
 
-  z-index: 1;
-  pointer-events: none;
-}
+  .line path {
+    fill: none;
+    stroke: white;
+    stroke-width: 5;
+    stroke-dasharray: 10 8;
+    stroke-linecap: round;
+    opacity: 0.8;
+  }
 
-.line path {
-  fill: none;
-  stroke: white;
-  stroke-width: 5;
-  stroke-dasharray: 10 8;
-  stroke-linecap: round;
-  opacity: 0.8;
-}
+  .campMapIcons {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 4rem;
+    z-index: 5;
+  }
 
-/* Auto immer ganz oben */
-.car {
-  position: absolute;
-  z-index: 10;
+  .house {
+    top: 20px;
+  }
 
-  font-size: 1.8rem;
-  pointer-events: none;
+  .tent {
+    top: 200px;
+  }
 
-  transform: translate(-50%, -50%);
-}
+  .shop {
+    position: absolute;
+    top: 218px; /* gleiche Höhe wie Zelt */
+    left: calc(50% + 65px); /* rechts daneben */
+    transform: translateX(-50%) scale(0.5);
 
-/* Countdowns */
-.countdown {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  color: white;
-  font-size: 0.9rem;
-  text-align: center;
-  width: 80%;
-  z-index: 6;
-}
+    font-size: 4rem;
+    z-index: 5;
+    cursor: pointer;
+  }
 
-.countdown.start {
-  top: 265px;
-}
+  @media (max-width: 600px) {
+    .shop {
+      left: calc(50% + 55px);
+      transform: translateX(-50%) scale(0.45);
+    }
+  }
 
-.countdown.end {
-  top: 385px;
+  .festival {
+    position: absolute;
+    top: 340px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4rem;
+    z-index: 5;
+  }
+
+  /* Countdowns */
+  .countdown {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 0.9rem;
+    text-align: center;
+    width: 80%;
+    z-index: 6;
+  }
+
+  .countdown.start {
+    top: 265px;
+  }
+
+  .countdown.end {
+    top: 385px;
+  }
 }
 </style>

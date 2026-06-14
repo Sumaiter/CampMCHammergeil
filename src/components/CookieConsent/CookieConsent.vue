@@ -57,7 +57,7 @@ const decline = () => {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .cookie-bar {
   position: fixed;
   bottom: 0;
@@ -71,81 +71,81 @@ const decline = () => {
 
   padding: 1rem;
   border-top: 1px solid rgba(120, 255, 200, 0.2);
-}
 
-.inner {
-  max-width: 950px;
-  margin: 0 auto;
+  .inner {
+    max-width: 950px;
+    margin: 0 auto;
 
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 2rem;
-}
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
 
-.text {
-  max-width: 700px;
-}
+    .text {
+      max-width: 700px;
 
-h3 {
-  margin: 0 0 0.5rem 0;
-  color: #78ffc8;
-}
+      h3 {
+        margin: 0 0 0.5rem 0;
+        color: #78ffc8;
+      }
 
-h4 {
-  margin-top: 1rem;
-  margin-bottom: 0.3rem;
-  color: #78ffc8;
-}
+      h4 {
+        margin-top: 1rem;
+        margin-bottom: 0.3rem;
+        color: #78ffc8;
+      }
 
-p {
-  font-size: 0.85rem;
-  line-height: 1.4;
-  opacity: 0.9;
-}
+      p {
+        font-size: 0.85rem;
+        line-height: 1.4;
+        opacity: 0.9;
+      }
 
-.active {
-  font-size: 0.75rem;
-  color: #78ffc8;
-  margin-top: 0.3rem;
-}
+      .active {
+        font-size: 0.75rem;
+        color: #78ffc8;
+        margin-top: 0.3rem;
+      }
 
-ul {
-  margin: 0.5rem 0;
-  padding-left: 1.2rem;
-  font-size: 0.8rem;
-  opacity: 0.85;
-}
+      ul {
+        margin: 0.5rem 0;
+        padding-left: 1.2rem;
+        font-size: 0.8rem;
+        opacity: 0.85;
+      }
+    }
 
-.buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 160px;
-}
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-width: 160px;
 
-button {
-  padding: 0.7rem 1rem;
-  border-radius: 6px;
-  font-weight: bold;
-  cursor: pointer;
-  border: none;
-  transition: 0.2s;
-}
+      button {
+        padding: 0.7rem 1rem;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        border: none;
+        transition: 0.2s;
 
-.accept {
-  background: #78ffc8;
-  color: black;
-}
+        &:hover {
+          opacity: 0.85;
+          transform: scale(1.03);
+        }
+      }
 
-.decline {
-  background: transparent;
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
+      .accept {
+        background: #78ffc8;
+        color: black;
+      }
 
-button:hover {
-  opacity: 0.85;
-  transform: scale(1.03);
+      .decline {
+        background: transparent;
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
 }
 </style>

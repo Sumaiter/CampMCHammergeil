@@ -129,36 +129,36 @@
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .content {
   color: white;
   text-align: left;
   padding: 6vh 10vw;
   max-width: 900px;
   margin: 0 auto;
-}
 
-h1 {
-  text-align: center;
-  margin-bottom: 4vh;
-  font-family: 'Metal Mania', cursive;
-  color: #78ffc8;
-  letter-spacing: 0.1em;
-}
+  h1 {
+    text-align: center;
+    margin-bottom: 4vh;
+    font-family: 'Metal Mania', cursive;
+    color: #78ffc8;
+    letter-spacing: 0.1em;
+  }
 
-h2 {
-  margin-top: 3vh;
-  color: #78ffc8;
-  font-size: 1.2rem;
-}
+  h2 {
+    margin-top: 3vh;
+    color: #78ffc8;
+    font-size: 1.2rem;
+  }
 
-p,
-li {
-  line-height: 1.6;
-  opacity: 0.9;
-}
+  p,
+  li {
+    line-height: 1.6;
+    opacity: 0.9;
+  }
 
-ul {
-  padding-left: 1.2rem;
+  ul {
+    padding-left: 1.2rem;
+  }
 }
 </style>
