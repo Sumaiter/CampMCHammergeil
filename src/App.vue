@@ -1,5 +1,5 @@
 <template>
-  <FogCanvas />
+  <SpaceBackground />
 
   <CookieConsent />
 
@@ -16,7 +16,7 @@
 import CookieConsent from './components/CookieConsent/CookieConsent.vue'
 import SiteFooter from './components/Footer/SiteFooter.vue'
 import SiteHeader from './components/SiteHeader.vue'
-import FogCanvas from './components/FogCanvas.vue'
+import SpaceBackground from './components/SpaceBackground.vue'
 </script>
 
 <style scoped lang="scss">
