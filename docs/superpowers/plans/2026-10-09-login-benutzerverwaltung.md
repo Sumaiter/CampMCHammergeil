@@ -30,7 +30,7 @@
 1. **Groß-/Kleinschreibung beim Login:** `JOSH` loggt sich als `josh` ein, und der Server liefert den gespeicherten Namen zurück (Test in Task 4).
 2. **Username mit Leerzeichen am Rand:** `"  josh "` wird beim Anlegen und beim Login getrimmt und nicht als ungültig abgelehnt (Tests in Task 4 und 5).
 3. **Nicht-numerische oder unbekannte `:id`:** `DELETE /api/admin/users/abc` → `404` statt `500` (Test in Task 5).
-4. **Kaputter JSON-Body / fehlende Felder:** Ein `POST` mit Content-Type JSON, aber ungültigem Body oder fehlendem Feld → `400` mit deutscher Meldung, kein `500` (Tests in Task 1 und 4).
+4. **Kaputter JSON-Body / fehlende Felder:** Ungültiges JSON → `400 'Ungültige Anfrage'`. Fehlende Felder → `400` mit deutscher Meldung, beim Login stattdessen `401` mit der Standardmeldung. Nie `500` (Tests in Task 4 und 5).
 5. **Offener Redirect nach Login:** `/login?redirect=//evil.com` oder `https://evil.com` führt auf `/` (Test in Task 7).
 
 ---
