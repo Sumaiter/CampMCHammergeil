@@ -76,7 +76,31 @@
       </section>
 
       <section>
-        <h2>5. Kontaktaufnahme</h2>
+        <h2>5. Benutzerkonten</h2>
+        <p>
+          Für den internen Bereich (z. B. den Shop) legt der Administrator Benutzerkonten an. Eine
+          öffentliche Registrierung gibt es nicht. Zu jedem Konto speichern wir:
+        </p>
+        <ul>
+          <li>Benutzername</li>
+          <li>Passwort – ausschließlich als nicht umkehrbarer Hash, nie im Klartext</li>
+          <li>Zeitpunkt der Kontoerstellung</li>
+          <li>Bei Anmeldung: eine Session-Kennung (als Hash) und deren Ablaufzeit</li>
+        </ul>
+        <p>
+          Die Daten werden in einer Datenbank von <strong>Cloudflare D1</strong> gespeichert
+          (Anbieter siehe Abschnitt 3) und dienen ausschließlich dazu, dir Zugang zum internen
+          Bereich zu ermöglichen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO.
+        </p>
+        <p>
+          Sessions werden beim Logout gelöscht, spätestens nach 30 Tagen ungültig. Dein Konto und
+          alle zugehörigen Daten werden gelöscht, sobald der Administrator es entfernt – sprich ihn
+          dafür einfach an.
+        </p>
+      </section>
+
+      <section>
+        <h2>6. Kontaktaufnahme</h2>
         <p>
           Wenn du uns per E-Mail kontaktierst, werden deine Angaben zur Bearbeitung der Anfrage
           gespeichert. Diese Daten geben wir nicht ohne deine Einwilligung weiter.
@@ -84,15 +108,20 @@
       </section>
 
       <section>
-        <h2>6. Cookies</h2>
+        <h2>7. Cookies</h2>
         <p>
           Diese Website verwendet in der Regel keine Cookies zur Nutzerverfolgung. Falls Cookies
           eingesetzt werden, dienen sie ausschließlich der technischen Funktionalität.
         </p>
+        <p>
+          Nach der Anmeldung setzen wir das technisch notwendige Cookie <strong>session</strong>. Es
+          hält dich eingeloggt und wird beim Logout gelöscht, spätestens nach 30 Tagen. Eine
+          Einwilligung ist dafür nicht erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG).
+        </p>
       </section>
 
       <section>
-        <h2>7. Analyse-Tools</h2>
+        <h2>8. Analyse-Tools</h2>
         <p>
           Falls Analyse-Tools (z. B. Google Analytics) eingesetzt werden, erfolgt dies nur mit
           deiner Einwilligung. Aktuell werden keine Tracking-Tools verwendet.
@@ -100,7 +129,7 @@
       </section>
 
       <section>
-        <h2>8. Deine Rechte</h2>
+        <h2>9. Deine Rechte</h2>
         <p>Du hast jederzeit das Recht auf:</p>
         <ul>
           <li>Auskunft über gespeicherte Daten</li>
@@ -112,7 +141,7 @@
       </section>
 
       <section>
-        <h2>9. Widerruf deiner Einwilligung</h2>
+        <h2>10. Widerruf deiner Einwilligung</h2>
         <p>
           Du kannst eine bereits erteilte Einwilligung jederzeit widerrufen. Dazu reicht eine
           formlose Mitteilung per E-Mail.
@@ -120,7 +149,7 @@
       </section>
 
       <section>
-        <h2>10. Änderungen</h2>
+        <h2>11. Änderungen</h2>
         <p>
           Wir behalten uns vor, diese Datenschutzerklärung anzupassen, damit sie stets den aktuellen
           rechtlichen Anforderungen entspricht.

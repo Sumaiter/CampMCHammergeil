@@ -46,3 +46,20 @@ npm run build
 ```sh
 npm run lint
 ```
+
+## Backend (Cloudflare Worker + D1)
+
+Die Seite läuft als Cloudflare Worker: `/api/*` beantwortet der Worker (`worker/`), alles andere
+ist die Vue-App. Benutzer und Sessions liegen in der D1-Datenbank `campmchammergeil`.
+
+```sh
+npm run dev                            # App + API + lokale D1 (Vite + @cloudflare/vite-plugin)
+npm test                               # Worker- und Frontend-Tests (Vitest)
+npm run db:migrate:local               # Migrationen auf die lokale D1 anwenden
+npm run create-admin -- <name>         # Admin in der lokalen D1 anlegen
+npm run create-admin -- <name> --remote  # Admin in der Produktions-D1 anlegen
+npm run db:migrate:remote              # Migrationen auf die Produktions-D1 anwenden
+npm run deploy                         # Build + wrangler deploy
+```
+
+Nach Änderungen an `wrangler.jsonc` die Typen neu erzeugen: `npm run cf-typegen`.
