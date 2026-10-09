@@ -16,9 +16,7 @@ describe('Worker-Grundgerüst', () => {
   })
 
   it('Migration ist angewendet', async () => {
-    const row = await env.DB.prepare(
-      "SELECT name FROM sqlite_master WHERE name = 'users'",
-    ).first()
+    const row = await env.DB.prepare("SELECT name FROM sqlite_master WHERE name = 'users'").first()
     expect(row).not.toBeNull()
   })
 })

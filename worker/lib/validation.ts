@@ -13,9 +13,7 @@ export class HttpError extends Error {
 }
 
 // Liest den JSON-Body. Kaputtes JSON oder etwas anderes als ein Objekt ergibt 400.
-export async function readJson<T extends Record<string, unknown>>(
-  c: Context,
-): Promise<Partial<T>> {
+export async function readJson<T extends Record<string, unknown>>(c: Context): Promise<Partial<T>> {
   let body: unknown
   try {
     body = await c.req.json()
@@ -26,4 +24,26 @@ export async function readJson<T extends Record<string, unknown>>(
     throw new HttpError(400, 'Ungültige Anfrage')
   }
   return body as Partial<T>
+}
+
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,32}$/
+
+export function normalizeUsername(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+export function validateUsername(name: string): void {
+  if (!USERNAME_PATTERN.test(name)) {
+    throw new HttpError(
+      400,
+      'Benutzername muss 3–32 Zeichen lang sein und darf nur Buchstaben, Ziffern, . _ - enthalten',
+    )
+  }
+}
+
+export function validatePassword(value: unknown): string {
+  if (typeof value !== 'string' || value.length < 8 || value.length > 128) {
+    throw new HttpError(400, 'Passwort muss 8–128 Zeichen lang sein')
+  }
+  return value
 }
