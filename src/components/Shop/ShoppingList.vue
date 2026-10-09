@@ -1,6 +1,5 @@
 <template>
-  <div class="shop-choose">
-    <h2>ShopList</h2>
-    <router-view />
+  <div class="page-section">
+    <h1 class="page-title">Aktuelle Liste</h1>
   </div>
 </template>

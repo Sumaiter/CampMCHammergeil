@@ -1,42 +1,36 @@
 <template>
   <FogCanvas />
 
-  <Cookie />
+  <CookieConsent />
 
   <div class="app-layout">
-    <div class="page">
-      <Logo />
+    <SiteHeader />
+    <main class="page">
       <router-view />
-    </div>
-    <Footer />
+    </main>
+    <SiteFooter />
   </div>
 </template>
 
 <script setup lang="ts">
-import Cookie from './components/CookieConsent/CookieConsent.vue'
-import Footer from './components/Footer/Footer.vue'
-import Logo from './components/Logo.vue'
+import CookieConsent from './components/CookieConsent/CookieConsent.vue'
+import SiteFooter from './components/Footer/SiteFooter.vue'
+import SiteHeader from './components/SiteHeader.vue'
 import FogCanvas from './components/FogCanvas.vue'
 </script>
 
 <style scoped lang="scss">
-:global(html, body, #app) {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  min-height: 100%;
-  background: #111;
-  overflow-x: hidden;
+.app-layout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .page {
   flex: 1;
   width: 100%;
-}
-
-.app-layout {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 </style>

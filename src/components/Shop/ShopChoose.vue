@@ -1,69 +1,89 @@
 <script setup lang="ts">
-import { routerHelper } from '@/router/routerHelper'
 import { RoutePath } from '@/router/routePath'
+
+const options = [
+  { to: RoutePath.Shopping, icon: '🛍️', label: 'Einkaufen' },
+  { to: RoutePath.ShoppingList, icon: '📝', label: 'Aktuelle Liste' },
+  { to: RoutePath.ShoppingOverview, icon: '📊', label: 'Übersicht' },
+]
 </script>
 
 <template>
-  <div class="shop-choose">
-    <h2>Shop</h2>
+  <div class="page-section">
+    <h1 class="page-title">Shop</h1>
 
-    <div class="buttons">
-      <button class="shopButton" @click.stop="routerHelper.goTo(RoutePath.Shopping)">
-        Einkaufen
-      </button>
-
-      <button class="shopButton" @click.stop="routerHelper.goTo(RoutePath.ShoppingList)">
-        Aktuelle Liste
-      </button>
-
-      <button class="shopButton" @click.stop="routerHelper.goTo(RoutePath.ShoppingOverview)">
-        Übersicht
-      </button>
-    </div>
-    <router-view />
+    <nav class="options" aria-label="Shop">
+      <router-link
+        v-for="option in options"
+        :key="option.to"
+        :to="option.to"
+        class="option glass-card"
+      >
+        <span class="icon" aria-hidden="true">{{ option.icon }}</span>
+        <span class="label">{{ option.label }}</span>
+      </router-link>
+    </nav>
   </div>
 </template>
 
 <style scoped lang="scss">
-.shop-choose {
-  color: white;
-  text-align: center;
-  margin-top: 60px;
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
 
-  .buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    max-width: 220px;
-    margin: 30px auto;
+.option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 140px;
+  padding: 1.5rem 1rem;
 
-    .shopButton {
-      padding: 0.8rem 1rem;
-      border-radius: 8px;
-      font-weight: bold;
-      cursor: pointer;
-      border: none;
-      transition: 0.2s ease;
+  text-decoration: none;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
-      backdrop-filter: blur(10px);
-      font-size: 0.95rem;
+  .icon {
+    font-size: 2.5rem;
+    line-height: 1;
+  }
 
-      background: rgba(120, 255, 200, 0.15);
-      color: #78ffc8;
-      border: 1px solid rgba(120, 255, 200, 0.3);
+  .label {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--c-accent);
+  }
 
-      &:hover {
-        opacity: 0.9;
-        transform: scale(1.1);
-      }
-    }
+  &:hover {
+    transform: translateY(-4px);
+    border-color: var(--c-border-strong);
+    box-shadow: var(--shadow-card), var(--glow);
   }
 }
 
-@media (max-width: 480px) {
-  .shop-choose {
-    .buttons {
-      max-width: 90%;
+/* 📱 MOBILE: kompakte Zeilen statt großer Kacheln */
+@media (max-width: 600px) {
+  .options {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .option {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 1rem;
+    min-height: 64px;
+    padding: 0.9rem 1.25rem;
+
+    .icon {
+      font-size: 1.75rem;
     }
   }
 }

@@ -1,35 +1,43 @@
 <template>
-  <div v-if="visible" class="cookie-bar">
-    <div class="inner">
-      <div class="text">
-        <h3>Cookie-Einstellungen</h3>
+  <Transition name="slide-up">
+    <section
+      v-if="visible"
+      class="cookie-bar"
+      role="dialog"
+      aria-labelledby="cookie-title"
+      aria-describedby="cookie-text"
+    >
+      <div class="inner">
+        <div class="text">
+          <h3 id="cookie-title">🍪 Cookie-Einstellungen</h3>
 
-        <p>
-          Diese Website verwendet nur technisch notwendige Cookies und vergleichbare Technologien
-          für Betrieb, Sicherheit und Performance. Optionale Cookies werden nicht eingesetzt.
-        </p>
+          <p id="cookie-text">
+            Diese Website verwendet nur technisch notwendige Cookies und vergleichbare Technologien
+            für Betrieb, Sicherheit und Performance. Optionale Cookies werden nicht eingesetzt.
+          </p>
 
-        <div class="category">
-          <h4>Essentiell</h4>
-          <p>Notwendig für den Betrieb der Website</p>
+          <div class="category">
+            <div class="category-head">
+              <h4>Essentiell</h4>
+              <span class="active">Immer aktiv</span>
+            </div>
+            <p>Notwendig für den Betrieb der Website</p>
 
-          <p class="active">Immer aktiv</p>
+            <ul>
+              <li>Speicherung deiner Cookie-Einstellungen (localStorage)</li>
+              <li>Website-Funktion (Vue Router Navigation)</li>
+              <li>Sicherheits- und Performancefunktionen durch Cloudflare</li>
+            </ul>
+          </div>
+        </div>
 
-          <ul>
-            <li>Speicherung deiner Cookie-Einstellungen (localStorage)</li>
-            <li>Website-Funktion (Vue Router Navigation)</li>
-            <li>Sicherheits- und Performancefunktionen durch Cloudflare</li>
-          </ul>
+        <div class="buttons">
+          <button type="button" class="decline" @click="decline">Alle ablehnen</button>
+          <button type="button" class="accept" @click="accept">Alle akzeptieren</button>
         </div>
       </div>
-
-      <div class="buttons">
-        <button class="decline" @click="decline">Alle ablehnen</button>
-
-        <button class="accept" @click="accept">Alle akzeptieren</button>
-      </div>
-    </div>
-  </div>
+    </section>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -60,92 +68,163 @@ const decline = () => {
 <style scoped lang="scss">
 .cookie-bar {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
   z-index: 9999;
+  transform: translateX(-50%);
 
-  background: rgba(0, 0, 0, 0.88);
-  backdrop-filter: blur(10px);
-  color: white;
+  width: min(960px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: clamp(1rem, 3vw, 1.5rem);
 
-  padding: 1rem;
-  border-top: 1px solid rgba(120, 255, 200, 0.2);
+  background: var(--c-surface-strong);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: 0 -8px 50px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--c-text);
+}
 
-  .inner {
-    max-width: 950px;
-    margin: 0 auto;
+.inner {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(1rem, 3vw, 2rem);
+}
 
+.text {
+  flex: 1;
+  min-width: 0;
+
+  h3 {
+    margin-bottom: 0.4rem;
+    font-size: 1.05rem;
+    color: var(--c-accent);
+  }
+
+  p {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--c-text-muted);
+  }
+}
+
+.category {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+
+  .category-head {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: 2rem;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.2rem;
+  }
 
-    .text {
-      max-width: 700px;
+  h4 {
+    font-size: 0.9rem;
+    color: var(--c-text);
+  }
 
-      h3 {
-        margin: 0 0 0.5rem 0;
-        color: #78ffc8;
-      }
+  .active {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(120, 255, 200, 0.14);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--c-accent);
+    white-space: nowrap;
+  }
 
-      h4 {
-        margin-top: 1rem;
-        margin-bottom: 0.3rem;
-        color: #78ffc8;
-      }
+  ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.1rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--c-text-muted);
+  }
+}
 
-      p {
-        font-size: 0.85rem;
-        line-height: 1.4;
-        opacity: 0.9;
-      }
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 180px;
 
-      .active {
-        font-size: 0.75rem;
-        color: #78ffc8;
-        margin-top: 0.3rem;
-      }
+  button {
+    min-height: 44px;
+    padding: 0.65rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      transform 0.15s ease,
+      filter 0.15s ease,
+      background 0.15s ease;
 
-      ul {
-        margin: 0.5rem 0;
-        padding-left: 1.2rem;
-        font-size: 0.8rem;
-        opacity: 0.85;
-      }
+    &:hover {
+      transform: translateY(-1px);
     }
 
-    .buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      min-width: 160px;
-
-      button {
-        padding: 0.7rem 1rem;
-        border-radius: 6px;
-        font-weight: bold;
-        cursor: pointer;
-        border: none;
-        transition: 0.2s;
-
-        &:hover {
-          opacity: 0.85;
-          transform: scale(1.03);
-        }
-      }
-
-      .accept {
-        background: #78ffc8;
-        color: black;
-      }
-
-      .decline {
-        background: transparent;
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-      }
+    &:active {
+      transform: translateY(0);
     }
   }
+
+  .accept {
+    border: none;
+    background: var(--c-accent);
+    color: #04140d;
+
+    &:hover {
+      filter: brightness(1.08);
+    }
+  }
+
+  .decline {
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: transparent;
+    color: var(--c-text);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
+}
+
+/* 📱 MOBILE: Text oben, Buttons nebeneinander darunter */
+@media (max-width: 640px) {
+  .inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .buttons {
+    flex-direction: row;
+    min-width: 0;
+
+    button {
+      flex: 1;
+    }
+  }
+}
+
+/* Ein-/Ausblenden */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition:
+    transform 0.35s ease,
+    opacity 0.35s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 24px);
 }
 </style>

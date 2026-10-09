@@ -1,70 +1,63 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { routerHelper } from '@/router/routerHelper'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RoutePath } from '@/router/routePath'
 import festivalImg from '../pics/festival.png'
-
-const campStartZelt = ref('')
-const campStartFestival = ref('')
 
 const startDateZelt = new Date('2026-06-05T00:00:00') // ende von rar 2026
 const endDateZelt = new Date('2027-06-02T00:00:00')
 const endDateFestival = new Date('2027-06-04T00:00:00')
 
-let interval: number
+// Geometrie der gestrichelten Strecke: SVG-viewBox 100×400, gezeichnet in 120×400 px
+const TRACK_WIDTH = 120
+const TRACK_TOP = 60
+const TRACK_SCALE_X = TRACK_WIDTH / 100
 
-function formatCountdown(target: Date) {
-  const diff = target.getTime() - Date.now()
+const now = ref(Date.now())
+const trackPath = ref<SVGPathElement | null>(null)
 
-  if (diff <= 0) return ''
+let interval: number | undefined
 
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24)
-  const minutes = Math.floor((diff / (1000 * 60)) % 60)
-  const seconds = Math.floor((diff / 1000) % 60)
+const pad = (value: number) => String(value).padStart(2, '0')
 
-  return `${days} Tage ${hours} Stunden ${minutes} Minuten ${seconds} Sekunden`
+function getCountdown(target: Date) {
+  const diff = target.getTime() - now.value
+
+  if (diff <= 0) return null
+
+  return {
+    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+    time: [
+      Math.floor((diff / (1000 * 60 * 60)) % 24),
+      Math.floor((diff / (1000 * 60)) % 60),
+      Math.floor((diff / 1000) % 60),
+    ]
+      .map(pad)
+      .join(':'),
+  }
 }
 
-function updateCountdowns() {
-  campStartZelt.value = formatCountdown(endDateZelt)
-  campStartFestival.value = formatCountdown(endDateFestival)
-}
+const campStartZelt = computed(() => getCountdown(endDateZelt))
+const campStartFestival = computed(() => getCountdown(endDateFestival))
 
-const carX = ref(0)
-const carY = ref(0)
+// Auto fährt anteilig zur vergangenen Zeit von Haus (Start) bis Festival (Ende)
+const carStyle = computed(() => {
+  const path = trackPath.value
+  if (!path) return { display: 'none' }
 
-let path1: SVGPathElement | null = null
-let pathLength = 0
-
-function updateCar() {
-  if (!path1) return
-
-  const now = Date.now()
   const start = startDateZelt.getTime()
   const end = endDateFestival.getTime()
+  const progress = Math.min(Math.max((now.value - start) / (end - start), 0), 1)
+  const point = path.getPointAtLength(progress * path.getTotalLength())
 
-  const progress = Math.min(Math.max((now - start) / (end - start), 0), 1)
-
-  const point = path1.getPointAtLength(progress * pathLength)
-
-  carX.value = point.x
-  carY.value = point.y
-}
+  return {
+    left: `calc(50% - ${TRACK_WIDTH / 2}px + ${point.x * TRACK_SCALE_X}px)`,
+    top: `${TRACK_TOP + point.y}px`,
+  }
+})
 
 onMounted(() => {
-  path1 = document.querySelector('#path1')
-
-  if (path1) {
-    pathLength = path1.getTotalLength()
-  }
-
-  updateCar()
-  updateCountdowns()
-
   interval = window.setInterval(() => {
-    updateCountdowns()
-    updateCar()
+    now.value = Date.now()
   }, 1000)
 })
 
@@ -74,152 +67,229 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="map-wrapper">
-    <!-- Haus -->
-    <span class="campMapIcons house">🏠</span>
+  <section class="camp-map" aria-label="Countdown bis zum Camp">
+    <div class="map-stage">
+      <!-- Haus -->
+      <span class="station house" role="img" aria-label="Zuhause">🏠</span>
 
-    <!-- Linie -->
-    <svg class="line" viewBox="0 0 100 400" preserveAspectRatio="none">
-      <path
-        id="path1"
-        d="
-          M50 20
-          C 90 60, 90 120, 50 180
-          C 20 220, 30 270, 50 310
-        "
-      />
-    </svg>
+      <!-- Strecke -->
+      <svg
+        class="track"
+        :style="{ width: `${TRACK_WIDTH}px`, top: `${TRACK_TOP}px` }"
+        viewBox="0 0 100 400"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path
+          ref="trackPath"
+          d="
+            M50 20
+            C 90 60, 90 120, 50 180
+            C 20 220, 30 270, 50 310
+          "
+        />
+      </svg>
 
-    <!-- Auto -->
-    <div
-      class="car"
-      :style="{
-        left: `calc(50% - 60px + ${carX * 1.2}px)`,
-        top: `${60 + carY}px`,
-      }"
-    >
-      🚗
+      <!-- Auto -->
+      <div class="car" :style="carStyle" aria-hidden="true">🚗</div>
+
+      <!-- Zelt + Shop -->
+      <span class="station tent" role="img" aria-label="Camp">🏕️</span>
+
+      <router-link :to="RoutePath.Shop" class="shop-link">
+        <span aria-hidden="true">🛒</span>
+        <span>Shop</span>
+      </router-link>
+
+      <div v-if="campStartZelt" class="countdown start">
+        <span class="countdown-label">Camp-Start</span>
+        <span class="countdown-days">
+          {{ campStartZelt.days }}
+          <small>{{ campStartZelt.days === 1 ? 'Tag' : 'Tage' }}</small>
+        </span>
+        <span class="countdown-time">{{ campStartZelt.time }}</span>
+      </div>
+
+      <!-- Festival -->
+      <img :src="festivalImg" class="festival" alt="Festival" width="64" height="64" />
+
+      <div v-if="campStartFestival" class="countdown end">
+        <span class="countdown-label">Festival-Start</span>
+        <span class="countdown-days">
+          {{ campStartFestival.days }}
+          <small>{{ campStartFestival.days === 1 ? 'Tag' : 'Tage' }}</small>
+        </span>
+        <span class="countdown-time">{{ campStartFestival.time }}</span>
+      </div>
     </div>
-
-    <!-- Zelt -->
-    <span class="campMapIcons tent">🏕️</span>
-    <span class="shop" @click.stop="routerHelper.goTo(RoutePath.Shop)">🛒</span>
-
-    <p v-if="campStartZelt" class="countdown start">
-      {{ campStartZelt }}
-    </p>
-
-    <!-- Festival -->
-    <img :src="festivalImg" class="festival" />
-
-    <p v-if="campStartFestival" class="countdown end">
-      {{ campStartFestival }}
-    </p>
-  </div>
+  </section>
 </template>
 
 <style scoped lang="scss">
-.map-wrapper {
+$station-size: 4rem;
+$side-gap: 48px; // Abstand von der Mitte zu Shop-Button und Countdown-Karten
+
+.camp-map {
+  padding: 0 var(--page-pad) clamp(2rem, 6vh, 4rem);
+}
+
+.map-stage {
   position: relative;
   width: 100%;
-  max-width: 600px;
-  height: 420px;
+  max-width: 620px;
+  height: 440px;
   margin: 0 auto;
-  /* Haus + Zelt */
+}
 
-  /* Auto immer ganz oben */
-  .car {
-    position: absolute;
-    z-index: 10;
+.station {
+  position: absolute;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  font-size: $station-size;
+  line-height: 1.2;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+}
 
-    font-size: 1.8rem;
-    pointer-events: none;
+.house {
+  top: 20px;
+}
 
-    transform: translate(-50%, -50%);
-  }
+.tent {
+  top: 200px;
+}
 
-  .line {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 120px;
-    height: 400px;
-    top: 60px;
+.festival {
+  position: absolute;
+  top: 340px;
+  left: 50%;
+  z-index: 5;
+  width: $station-size;
+  height: auto;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+}
 
-    z-index: 1;
-    pointer-events: none;
-  }
+.track {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  height: 400px;
+  transform: translateX(-50%);
+  pointer-events: none;
 
-  .line path {
+  path {
     fill: none;
-    stroke: white;
+    stroke: rgba(255, 255, 255, 0.75);
     stroke-width: 5;
     stroke-dasharray: 10 8;
     stroke-linecap: round;
-    opacity: 0.8;
+  }
+}
+
+/* Auto immer ganz oben */
+.car {
+  position: absolute;
+  z-index: 10;
+  font-size: 1.8rem;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* 🛒 SHOP */
+.shop-link {
+  position: absolute;
+  top: 218px;
+  left: calc(50% + #{$side-gap});
+  z-index: 6;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+
+  border: 1px solid var(--c-border-strong);
+  border-radius: 999px;
+  background: rgba(120, 255, 200, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--c-accent);
+  text-decoration: none;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+
+  span:first-child {
+    font-size: 1.3rem;
   }
 
-  .campMapIcons {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 4rem;
-    z-index: 5;
+  &:hover {
+    background: rgba(120, 255, 200, 0.22);
+    box-shadow: var(--glow);
+    transform: translateY(-2px);
+  }
+}
+
+/* ⏳ COUNTDOWNS */
+.countdown {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  width: min(210px, calc(50% - #{$side-gap} - 4px));
+  padding: 10px clamp(10px, 2.5vw, 14px);
+
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+
+  &.start {
+    top: 196px;
+    right: calc(50% + #{$side-gap});
+    text-align: right;
   }
 
-  .house {
-    top: 20px;
+  &.end {
+    top: 330px;
+    left: calc(50% + #{$side-gap});
   }
 
-  .tent {
-    top: 200px;
+  .countdown-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-accent);
   }
 
-  .shop {
-    position: absolute;
-    top: 218px; /* gleiche Höhe wie Zelt */
-    left: calc(50% + 65px); /* rechts daneben */
-    transform: translateX(-50%) scale(0.5);
+  .countdown-days {
+    margin-top: 2px;
+    font-size: clamp(1.25rem, 6vw, 2rem);
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
 
-    font-size: 4rem;
-    z-index: 5;
-    cursor: pointer;
-  }
-
-  @media (max-width: 600px) {
-    .shop {
-      left: calc(50% + 55px);
-      transform: translateX(-50%) scale(0.45);
+    small {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--c-text-muted);
     }
   }
 
-  .festival {
-    position: absolute;
-    top: 340px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 4rem;
-    z-index: 5;
-  }
-
-  /* Countdowns */
-  .countdown {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    color: white;
-    font-size: 0.9rem;
-    text-align: center;
-    width: 80%;
-    z-index: 6;
-  }
-
-  .countdown.start {
-    top: 265px;
-  }
-
-  .countdown.end {
-    top: 385px;
+  .countdown-time {
+    font-size: clamp(0.85rem, 3vw, 1rem);
+    color: var(--c-text-muted);
   }
 }
 </style>

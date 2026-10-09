@@ -15,11 +15,8 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
-    "@tsparticles/slim": "^4.1.3",
-    "@tsparticles/vue3": "^4.1.3",
-    "tsparticles": "^4.1.3",
+    "@fontsource/metal-mania": "^5.3.0",
     "vue": "^3.5.32",
-    "vue-glitch": "^1.0.1",
     "vue-powerglitch": "^1.1.0",
     "vue-router": "^5.1.0"
   },

@@ -1,7 +1,5 @@
 <template>
-  <div class="shop-choose">
-    <h2>ShopOverview</h2>
-
-    <router-view />
+  <div class="page-section">
+    <h1 class="page-title">Übersicht</h1>
   </div>
 </template>

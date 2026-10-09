@@ -1,30 +1,33 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { RoutePath } from './routePath'
 import CampMap from '@/components/CampMap.vue'
-import Login from '@/components/Login/LoginView.vue'
-import Datenschutz from '@/components/Footer/Datenschutz.vue'
-import Impressum from '@/components/Footer/Impressum.vue'
-import Credits from '@/components/Footer/Credits.vue'
-import ShopChoose from '@/components/Shop/ShopChoose.vue'
-import Shopping from '@/components/Shop/Shopping.vue'
-import ShoppingList from '@/components/Shop/ShoppingList.vue'
-import ShoppingOverview from '@/components/Shop/ShoppingOverview.vue'
 
+// Startseite wird direkt geladen, alle anderen Seiten erst bei Bedarf (kleineres Start-Bundle).
 const routes = [
   { path: RoutePath.Home, component: CampMap },
-  { path: '/login', component: Login },
-  { path: '/datenschutz', component: Datenschutz },
-  { path: '/impressum', component: Impressum },
-  { path: '/credits', component: Credits },
-  { path: '/shop', component: ShopChoose },
-  { path: '/shopping', component: Shopping },
-  { path: '/shoppinglist', component: ShoppingList },
-  { path: '/shoppingoverview', component: ShoppingOverview },
+  { path: RoutePath.Login, component: () => import('@/components/Login/LoginView.vue') },
+  {
+    path: RoutePath.PrivacyPolicy,
+    component: () => import('@/components/Footer/DatenschutzPage.vue'),
+  },
+  { path: RoutePath.Imprint, component: () => import('@/components/Footer/ImpressumPage.vue') },
+  { path: RoutePath.Credits, component: () => import('@/components/Footer/CreditsPage.vue') },
+  { path: RoutePath.Shop, component: () => import('@/components/Shop/ShopChoose.vue') },
+  { path: RoutePath.Shopping, component: () => import('@/components/Shop/ShoppingPage.vue') },
+  { path: RoutePath.ShoppingList, component: () => import('@/components/Shop/ShoppingList.vue') },
+  {
+    path: RoutePath.ShoppingOverview,
+    component: () => import('@/components/Shop/ShoppingOverview.vue'),
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  // Nach einem Seitenwechsel oben starten, bei Zurück/Vor die alte Position wiederherstellen.
+  scrollBehavior(_to, _from, savedPosition) {
+    return savedPosition ?? { top: 0 }
+  },
 })
 
 export default router
