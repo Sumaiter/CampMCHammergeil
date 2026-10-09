@@ -2,6 +2,8 @@
 export enum RoutePath {
   Home = '/',
   Login = '/login',
+  Account = '/konto',
+  Admin = '/admin',
 
   PrivacyPolicy = '/datenschutz',
   Imprint = '/impressum',

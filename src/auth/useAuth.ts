@@ -1,0 +1,43 @@
+import { computed, readonly, ref } from 'vue'
+import { api, onUnauthorized } from '@/api/client'
+import type { User } from '@/api/types'
+
+// Globaler Login-Zustand – einmal pro Seitenaufruf vom Server geladen.
+const user = ref<User | null>(null)
+const isAdmin = computed(() => user.value?.isAdmin ?? false)
+let loading: Promise<void> | undefined
+
+onUnauthorized(() => {
+  user.value = null
+})
+
+function ensureLoaded(): Promise<void> {
+  loading ??= api
+    .get<{ user: User | null }>('/api/auth/me')
+    .then((data) => {
+      user.value = data.user
+    })
+    .catch(() => {
+      user.value = null
+      loading = undefined // beim nächsten Seitenwechsel erneut versuchen
+    })
+  return loading
+}
+
+async function login(username: string, password: string): Promise<void> {
+  const data = await api.post<{ user: User }>('/api/auth/login', { username, password })
+  user.value = data.user
+  loading = Promise.resolve()
+}
+
+async function logout(): Promise<void> {
+  try {
+    await api.post('/api/auth/logout')
+  } finally {
+    user.value = null
+  }
+}
+
+export function useAuth() {
+  return { user: readonly(user), isAdmin, ensureLoaded, login, logout }
+}
