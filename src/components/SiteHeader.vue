@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { RoutePath } from '@/router/routePath'
 import PlanetCanvas from './Planet/PlanetCanvas.vue'
+import { useAuth } from '@/auth/useAuth'
+
+const { user } = useAuth()
 </script>
 
 <template>
   <header class="site-header">
-    <!-- 🛰️ LOGIN -->
-    <router-link :to="RoutePath.Login" class="satellite" aria-label="Login">
+    <!-- 🛰️ LOGIN / KONTO -->
+    <router-link
+      :to="user ? RoutePath.Account : RoutePath.Login"
+      class="satellite"
+      :aria-label="user ? 'Konto' : 'Login'"
+    >
       <span class="satellite-icon" aria-hidden="true">🛰️</span>
-      <span class="satellite-label">Login</span>
+      <span class="satellite-label">{{ user ? user.username : 'Login' }}</span>
     </router-link>
 
     <!-- 🌍 PLANET -->
@@ -62,6 +69,10 @@ import PlanetCanvas from './Planet/PlanetCanvas.vue'
   }
 
   .satellite-label {
+    max-width: 9ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.18em;

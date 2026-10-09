@@ -113,11 +113,12 @@ describe('/api/auth', () => {
       expect(res.status).toBe(401)
     })
 
-    it('lehnt falsches aktuelles Passwort mit 401 ab', async () => {
+    it('lehnt falsches aktuelles Passwort mit 400 ab, ohne die Session zu beenden', async () => {
       const cookie = await login('josh', 'geheim123')
       const res = await changePassword(cookie, 'falsch123', 'neuespass1')
-      expect(res.status).toBe(401)
+      expect(res.status).toBe(400)
       expect(await res.json()).toEqual({ error: 'Aktuelles Passwort ist falsch' })
+      expect(await me(cookie)).toEqual({ id: joshId, username: 'josh', isAdmin: false })
     })
 
     it('lehnt zu kurzes neues Passwort mit 400 ab', async () => {

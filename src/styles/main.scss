@@ -167,6 +167,98 @@ input {
   }
 }
 
+// ---------- Formulare (Login, Konto, Benutzerverwaltung) ----------
+
+// Label + Eingabefeld untereinander; der span ist die Beschriftung
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  span {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--c-text-muted);
+  }
+}
+
+.form-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0.7rem 0.9rem;
+
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.35);
+
+  font-size: 1rem; // ≥16px verhindert Auto-Zoom auf iOS
+  color: var(--c-text);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &::placeholder {
+    color: rgba(238, 244, 241, 0.35);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--c-accent);
+    box-shadow: 0 0 0 3px rgba(120, 255, 200, 0.2);
+  }
+}
+
+.btn {
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--c-accent-mid), var(--c-accent-deep));
+
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    filter 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.12);
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// Dezente Variante, z. B. für Logout oder Abbrechen
+.btn-secondary {
+  border: 1px solid var(--c-border-strong);
+  background: transparent;
+  color: var(--c-accent);
+}
+
+.form-error {
+  font-size: 0.9rem;
+  color: #ff8a8a;
+}
+
+.form-success {
+  font-size: 0.9rem;
+  color: var(--c-accent);
+}
+
 // Nur für Screenreader sichtbar
 .sr-only {
   position: absolute;

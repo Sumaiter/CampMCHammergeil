@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RoutePath } from '@/router/routePath'
+import { useAuth } from '@/auth/useAuth'
+
+// Der Shop ist nur für eingeloggte Benutzer sichtbar
+const { user } = useAuth()
 
 const startDateZelt = new Date('2026-06-05T00:00:00') // ende von rar 2026
 const endDateZelt = new Date('2027-06-02T00:00:00')
@@ -207,7 +211,12 @@ onUnmounted(() => {
         <span>{{ totalPercent }} % geschafft</span>
       </div>
 
-      <router-link :to="RoutePath.Shop" class="shop-link" :style="{ top: toPercentY(CAMP.y) }">
+      <router-link
+        v-if="user"
+        :to="RoutePath.Shop"
+        class="shop-link"
+        :style="{ top: toPercentY(CAMP.y) }"
+      >
         <svg class="shop-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M2.5 4h2.2l2.3 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L19.8 8H5.6" />
           <circle cx="9.2" cy="19" r="1.4" />

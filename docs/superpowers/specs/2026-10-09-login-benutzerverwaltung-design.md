@@ -141,8 +141,8 @@ Benutzerobjekt: `{ id, username, isAdmin }`.
 | `DELETE` | `/api/admin/users/:id`          | Admin     | –                                   | `{ ok: true }`                |
 | `POST`   | `/api/admin/users/:id/password` | Admin     | `{ password }`                      | `{ ok: true }`                |
 
-Statuscodes: `400` ungültige Eingabe · `401` nicht eingeloggt / Login fehlgeschlagen /
-aktuelles Passwort falsch · `403` kein Admin oder verbotene Aktion · `404` Benutzer existiert
+Statuscodes: `400` ungültige Eingabe oder aktuelles Passwort falsch · `401` nicht eingeloggt /
+Login fehlgeschlagen · `403` kein Admin oder verbotene Aktion · `404` Benutzer existiert
 nicht · `409` Benutzername vergeben · `415` falscher Content-Type · `429` zu viele
 Login-Versuche · `500` unerwarteter Fehler (Meldung „Interner Fehler“, Details nur im Log).
 

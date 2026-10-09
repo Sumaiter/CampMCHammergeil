@@ -66,7 +66,7 @@ authRoutes.post('/password', requireUser, async (c) => {
     .first<{ password_hash: string }>()
   const current = typeof body.currentPassword === 'string' ? body.currentPassword : ''
   if (!row || !(await verifyPassword(current, row.password_hash))) {
-    throw new HttpError(401, 'Aktuelles Passwort ist falsch')
+    throw new HttpError(400, 'Aktuelles Passwort ist falsch')
   }
 
   const newPassword = validatePassword(body.newPassword)
