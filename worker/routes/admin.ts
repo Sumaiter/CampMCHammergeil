@@ -1,0 +1,113 @@
+import { Hono } from 'hono'
+import type { AppEnv } from '../types'
+import { requireAdmin } from '../middleware'
+import { hashPassword } from '../lib/password'
+import { deleteUserSessions } from '../lib/session'
+import {
+  HttpError,
+  normalizeUsername,
+  readJson,
+  validatePassword,
+  validateUsername,
+} from '../lib/validation'
+
+type UserRow = { id: number; username: string; is_admin: number; created_at: string }
+
+const NOT_FOUND = 'Benutzer nicht gefunden'
+
+// Schutzregeln, damit sich niemand aussperrt.
+export function assertDeletable(
+  target: { id: number; isAdmin: boolean },
+  actorId: number,
+  adminCount: number,
+): void {
+  if (target.id === actorId) throw new HttpError(403, 'Du kannst dein eigenes Konto nicht löschen')
+  if (target.isAdmin && adminCount <= 1) {
+    throw new HttpError(403, 'Der letzte Admin kann nicht gelöscht werden')
+  }
+}
+
+function parseId(value: string): number {
+  const id = Number(value)
+  if (!Number.isInteger(id) || id <= 0) throw new HttpError(404, NOT_FOUND)
+  return id
+}
+
+async function findUser(db: D1Database, id: number): Promise<UserRow> {
+  const row = await db
+    .prepare('SELECT id, username, is_admin, created_at FROM users WHERE id = ?')
+    .bind(id)
+    .first<UserRow>()
+  if (!row) throw new HttpError(404, NOT_FOUND)
+  return row
+}
+
+export const adminRoutes = new Hono<AppEnv>()
+
+adminRoutes.use('*', requireAdmin)
+
+adminRoutes.get('/users', async (c) => {
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, username, is_admin, created_at FROM users ORDER BY username COLLATE NOCASE',
+  ).all<UserRow>()
+  return c.json({
+    users: results.map((row) => ({
+      id: row.id,
+      username: row.username,
+      isAdmin: row.is_admin === 1,
+      createdAt: row.created_at,
+    })),
+  })
+})
+
+adminRoutes.post('/users', async (c) => {
+  const body = await readJson<{ username: unknown; password: unknown; isAdmin: unknown }>(c)
+  const username = normalizeUsername(body.username)
+  validateUsername(username)
+  const password = validatePassword(body.password)
+  const isAdmin = body.isAdmin === true
+
+  let row: { id: number } | null
+  try {
+    row = await c.env.DB.prepare(
+      'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?) RETURNING id',
+    )
+      .bind(username, await hashPassword(password), isAdmin ? 1 : 0)
+      .first<{ id: number }>()
+  } catch (err) {
+    if (err instanceof Error && /UNIQUE/.test(err.message)) {
+      throw new HttpError(409, 'Benutzername ist bereits vergeben')
+    }
+    throw err
+  }
+
+  return c.json({ user: { id: row!.id, username, isAdmin } }, 201)
+})
+
+adminRoutes.delete('/users/:id', async (c) => {
+  const target = await findUser(c.env.DB, parseId(c.req.param('id')))
+  const admins = await c.env.DB.prepare(
+    'SELECT COUNT(*) AS count FROM users WHERE is_admin = 1',
+  ).first<{ count: number }>()
+  assertDeletable(
+    { id: target.id, isAdmin: target.is_admin === 1 },
+    c.var.user!.id,
+    admins?.count ?? 0,
+  )
+
+  // Sessions verschwinden per ON DELETE CASCADE
+  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(target.id).run()
+  return c.json({ ok: true })
+})
+
+adminRoutes.post('/users/:id/password', async (c) => {
+  const target = await findUser(c.env.DB, parseId(c.req.param('id')))
+  const body = await readJson<{ password: unknown }>(c)
+  const password = validatePassword(body.password)
+
+  await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .bind(await hashPassword(password), target.id)
+    .run()
+  await deleteUserSessions(c.env.DB, target.id)
+  return c.json({ ok: true })
+})
