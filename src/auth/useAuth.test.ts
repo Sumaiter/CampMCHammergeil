@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const josh = { id: 1, username: 'josh', isAdmin: false }
+const josh = { id: 1, username: 'josh', isAdmin: false, mustChangePassword: false }
 
 const jsonResponse = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -91,6 +91,40 @@ describe('useAuth', () => {
     await auth.login('josh', 'geheim123')
     await expect(auth.logout()).resolves.toBeUndefined()
     expect(auth.user.value).toBeNull()
+  })
+
+  it('passwordChanged hebt die Passwortsperre im lokalen Zustand auf', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { user: { ...josh, mustChangePassword: true } }))
+    const { useAuth } = await load()
+    const auth = useAuth()
+    await auth.login('josh', 'startpass1')
+    expect(auth.user.value?.mustChangePassword).toBe(true)
+    auth.passwordChanged()
+    expect(auth.user.value).toEqual(josh)
+  })
+
+  it('deleteAccount sendet das Passwort per DELETE und setzt user auf null', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { user: josh }))
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }))
+    const { useAuth } = await load()
+    const auth = useAuth()
+    await auth.login('josh', 'geheim123')
+    await auth.deleteAccount('geheim123')
+    const [url, init] = fetchMock.mock.calls[1]!
+    expect(url).toBe('/api/auth/account')
+    expect(init.method).toBe('DELETE')
+    expect(JSON.parse(init.body)).toEqual({ password: 'geheim123' })
+    expect(auth.user.value).toBeNull()
+  })
+
+  it('deleteAccount behält den Login, wenn der Server ablehnt', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { user: josh }))
+    fetchMock.mockResolvedValueOnce(jsonResponse(400, { error: 'Passwort ist falsch' }))
+    const { useAuth } = await load()
+    const auth = useAuth()
+    await auth.login('josh', 'geheim123')
+    await expect(auth.deleteAccount('falsch')).rejects.toMatchObject({ status: 400 })
+    expect(auth.user.value).toEqual(josh)
   })
 
   it('setzt user auf null, wenn irgendeine Anfrage 401 liefert', async () => {

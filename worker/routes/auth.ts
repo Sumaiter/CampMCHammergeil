@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { deleteCookie, setCookie } from 'hono/cookie'
 import type { AppEnv } from '../types'
 import { requireUser } from '../middleware'
+import { deleteUserUnlessLastAdmin } from './admin'
 import { hashPassword, verifyPassword } from '../lib/password'
 import {
   createSession,
@@ -20,7 +21,13 @@ const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: 'Lax', path: '/
 let dummyHash: Promise<string> | undefined
 const getDummyHash = () => (dummyHash ??= hashPassword('dummy-password'))
 
-type UserRow = { id: number; username: string; password_hash: string; is_admin: number }
+type UserRow = {
+  id: number
+  username: string
+  password_hash: string
+  is_admin: number
+  must_change_password: number
+}
 
 export const authRoutes = new Hono<AppEnv>()
 
@@ -35,7 +42,7 @@ authRoutes.post('/login', async (c) => {
 
   const row = username
     ? await c.env.DB.prepare(
-        'SELECT id, username, password_hash, is_admin FROM users WHERE username = ?',
+        'SELECT id, username, password_hash, is_admin, must_change_password FROM users WHERE username = ?',
       )
         .bind(username)
         .first<UserRow>()
@@ -46,7 +53,14 @@ authRoutes.post('/login', async (c) => {
 
   const { token } = await createSession(c.env.DB, row.id)
   setCookie(c, SESSION_COOKIE, token, { ...COOKIE_OPTIONS, maxAge: SESSION_TTL_SECONDS })
-  return c.json({ user: { id: row.id, username: row.username, isAdmin: row.is_admin === 1 } })
+  return c.json({
+    user: {
+      id: row.id,
+      username: row.username,
+      isAdmin: row.is_admin === 1,
+      mustChangePassword: row.must_change_password === 1,
+    },
+  })
 })
 
 authRoutes.post('/logout', requireUser, async (c) => {
@@ -70,9 +84,35 @@ authRoutes.post('/password', requireUser, async (c) => {
   }
 
   const newPassword = validatePassword(body.newPassword)
-  await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+  if (newPassword === current) {
+    throw new HttpError(400, 'Das neue Passwort muss sich vom aktuellen unterscheiden')
+  }
+  await c.env.DB.prepare(
+    'UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?',
+  )
     .bind(await hashPassword(newPassword), user.id)
     .run()
   await deleteUserSessions(c.env.DB, user.id, c.var.sessionId!)
+  return c.json({ ok: true })
+})
+
+// Löscht das eigene Konto (Sessions verschwinden per ON DELETE CASCADE). Zur Bestätigung ist das
+// aktuelle Passwort nötig. Der letzte Admin bleibt erhalten, sonst könnte niemand mehr verwalten.
+authRoutes.delete('/account', requireUser, async (c) => {
+  const user = c.var.user!
+  const body = await readJson<{ password: unknown }>(c)
+
+  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+    .bind(user.id)
+    .first<{ password_hash: string }>()
+  const password = typeof body.password === 'string' ? body.password : ''
+  if (!row || !(await verifyPassword(password, row.password_hash))) {
+    throw new HttpError(400, 'Passwort ist falsch')
+  }
+
+  if (!(await deleteUserUnlessLastAdmin(c.env.DB, user.id))) {
+    throw new HttpError(409, 'Der letzte Admin kann sein Konto nicht löschen')
+  }
+  deleteCookie(c, SESSION_COOKIE, COOKIE_OPTIONS)
   return c.json({ ok: true })
 })

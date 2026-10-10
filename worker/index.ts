@@ -26,7 +26,10 @@ app.route('/api/admin', adminRoutes)
 app.notFound((c) => c.json({ error: 'Nicht gefunden' }, 404))
 
 app.onError((err, c) => {
-  if (err instanceof HttpError) return c.json({ error: err.message }, err.status)
+  if (err instanceof HttpError) {
+    const body = err.code ? { error: err.message, code: err.code } : { error: err.message }
+    return c.json(body, err.status)
+  }
   console.error(err)
   return c.json({ error: 'Interner Fehler' }, 500)
 })

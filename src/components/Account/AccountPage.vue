@@ -5,7 +5,7 @@ import { useAuth } from '@/auth/useAuth'
 import { routerHelper } from '@/router/routerHelper'
 import { RoutePath } from '@/router/routePath'
 
-const { user, isAdmin, logout } = useAuth()
+const { user, isAdmin, logout, passwordChanged, deleteAccount } = useAuth()
 
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -13,6 +13,11 @@ const repeatPassword = ref('')
 const error = ref('')
 const success = ref('')
 const pending = ref(false)
+
+// Konto löschen
+const deletePassword = ref('')
+const deleteError = ref('')
+const deleting = ref(false)
 
 async function changePassword() {
   error.value = ''
@@ -28,14 +33,40 @@ async function changePassword() {
       currentPassword: currentPassword.value,
       newPassword: newPassword.value,
     })
-    success.value = 'Passwort geändert.'
+    const wasForced = user.value?.mustChangePassword === true
+    passwordChanged()
     currentPassword.value = ''
     newPassword.value = ''
     repeatPassword.value = ''
+    if (wasForced) {
+      // Sperre ist aufgehoben – weiter zur Startseite
+      await routerHelper.replace(RoutePath.Home)
+      return
+    }
+    success.value = 'Passwort geändert.'
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : 'Passwort konnte nicht geändert werden'
   } finally {
     pending.value = false
+  }
+}
+
+async function onDeleteAccount() {
+  deleteError.value = ''
+  if (
+    !confirm('Dein Konto wirklich endgültig löschen? Das kann nicht rückgängig gemacht werden.')
+  ) {
+    return
+  }
+
+  deleting.value = true
+  try {
+    await deleteAccount(deletePassword.value)
+    await routerHelper.replace(RoutePath.Home)
+  } catch (err) {
+    deleteError.value = err instanceof ApiError ? err.message : 'Konto konnte nicht gelöscht werden'
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -49,11 +80,16 @@ async function onLogout() {
   <div class="page-section account">
     <h1 class="page-title">Hallo, {{ user?.username }}</h1>
 
+    <p v-if="user?.mustChangePassword" class="notice" role="alert">
+      Du musst dein Passwort ändern, bevor du fortfahren kannst. Wähle ein neues Passwort, das nur
+      du kennst.
+    </p>
+
     <form class="card glass-card" @submit.prevent="changePassword">
       <h2>Passwort ändern</h2>
 
       <label class="form-field">
-        <span>Aktuelles Passwort</span>
+        <span>{{ user?.mustChangePassword ? 'Vorläufiges Passwort' : 'Aktuelles Passwort' }}</span>
         <input
           v-model="currentPassword"
           class="form-input"
@@ -94,11 +130,40 @@ async function onLogout() {
     </form>
 
     <div class="actions">
-      <router-link v-if="isAdmin" :to="RoutePath.Admin" class="btn admin-link">
+      <router-link
+        v-if="isAdmin && !user?.mustChangePassword"
+        :to="RoutePath.Admin"
+        class="btn admin-link"
+      >
         Benutzerverwaltung
       </router-link>
       <button type="button" class="btn btn-secondary" @click="onLogout">Logout</button>
     </div>
+
+    <form class="card glass-card danger-zone" @submit.prevent="onDeleteAccount">
+      <h2>Konto löschen</h2>
+      <p class="hint">
+        Dein Konto und alle zugehörigen Daten werden endgültig gelöscht. Zur Bestätigung brauchst du
+        dein aktuelles Passwort.
+      </p>
+
+      <label class="form-field">
+        <span>Passwort</span>
+        <input
+          v-model="deletePassword"
+          class="form-input"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+      </label>
+
+      <p v-if="deleteError" class="form-error" role="alert">{{ deleteError }}</p>
+
+      <button type="submit" class="btn btn-secondary btn-danger" :disabled="deleting">
+        {{ deleting ? 'Löschen…' : 'Konto löschen' }}
+      </button>
+    </form>
   </div>
 </template>
 
@@ -117,6 +182,33 @@ async function onLogout() {
     font-size: 1.15rem;
     color: var(--c-accent);
   }
+}
+
+.notice {
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--c-accent);
+}
+
+.danger-zone {
+  margin-top: 1.25rem;
+  border-color: rgba(255, 138, 138, 0.35);
+
+  h2 {
+    color: #ff8a8a;
+  }
+
+  .hint {
+    font-size: 0.9rem;
+    color: var(--c-text-muted);
+  }
+}
+
+.btn-danger {
+  border-color: rgba(255, 138, 138, 0.5);
+  color: #ff8a8a;
 }
 
 .actions {

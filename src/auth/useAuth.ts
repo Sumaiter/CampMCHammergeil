@@ -30,6 +30,17 @@ async function login(username: string, password: string): Promise<void> {
   loading = Promise.resolve()
 }
 
+// Nach erfolgreicher Passwortänderung: Sperre im lokalen Zustand aufheben.
+function passwordChanged(): void {
+  if (user.value) user.value = { ...user.value, mustChangePassword: false }
+}
+
+// Löscht das eigene Konto (Passwort zur Bestätigung) und beendet die lokale Sitzung.
+async function deleteAccount(password: string): Promise<void> {
+  await api.delete('/api/auth/account', { password })
+  user.value = null
+}
+
 async function logout(): Promise<void> {
   try {
     await api.post('/api/auth/logout')
@@ -42,5 +53,13 @@ async function logout(): Promise<void> {
 }
 
 export function useAuth() {
-  return { user: readonly(user), isAdmin, ensureLoaded, login, logout }
+  return {
+    user: readonly(user),
+    isAdmin,
+    ensureLoaded,
+    login,
+    logout,
+    passwordChanged,
+    deleteAccount,
+  }
 }

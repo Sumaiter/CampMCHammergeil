@@ -1,3 +1,8 @@
-export type User = { id: number; username: string; isAdmin: boolean }
+export type User = {
+  id: number
+  username: string
+  isAdmin: boolean
+  mustChangePassword: boolean
+}
 
-export type AdminUser = User & { createdAt: string }
+export type AdminUser = Omit<User, 'mustChangePassword'> & { createdAt: string }

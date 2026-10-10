@@ -22,7 +22,9 @@ describe('/api/auth', () => {
     it('setzt mit richtigen Daten das Cookie und liefert den User', async () => {
       const res = await postLogin({ username: 'josh', password: 'geheim123' })
       expect(res.status).toBe(200)
-      expect(await res.json()).toEqual({ user: { id: joshId, username: 'josh', isAdmin: false } })
+      expect(await res.json()).toEqual({
+        user: { id: joshId, username: 'josh', isAdmin: false, mustChangePassword: false },
+      })
       const cookie = res.headers.get('set-cookie')!
       expect(cookie).toMatch(/^session=[^;]+;/)
       for (const attr of ['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/', 'Max-Age=2592000']) {
@@ -73,7 +75,12 @@ describe('/api/auth', () => {
 
     it('liefert mit Cookie den User', async () => {
       const cookie = await login('josh', 'geheim123')
-      expect(await me(cookie)).toEqual({ id: joshId, username: 'josh', isAdmin: false })
+      expect(await me(cookie)).toEqual({
+        id: joshId,
+        username: 'josh',
+        isAdmin: false,
+        mustChangePassword: false,
+      })
     })
 
     it('liefert bei abgelaufener Session user null', async () => {
@@ -118,7 +125,12 @@ describe('/api/auth', () => {
       const res = await changePassword(cookie, 'falsch123', 'neuespass1')
       expect(res.status).toBe(400)
       expect(await res.json()).toEqual({ error: 'Aktuelles Passwort ist falsch' })
-      expect(await me(cookie)).toEqual({ id: joshId, username: 'josh', isAdmin: false })
+      expect(await me(cookie)).toEqual({
+        id: joshId,
+        username: 'josh',
+        isAdmin: false,
+        mustChangePassword: false,
+      })
     })
 
     it('lehnt zu kurzes neues Passwort mit 400 ab', async () => {
@@ -134,7 +146,12 @@ describe('/api/auth', () => {
       const res = await changePassword(a, 'geheim123', 'neuespass1')
       expect(res.status).toBe(200)
       expect(await res.json()).toEqual({ ok: true })
-      expect(await me(a)).toEqual({ id: joshId, username: 'josh', isAdmin: false })
+      expect(await me(a)).toEqual({
+        id: joshId,
+        username: 'josh',
+        isAdmin: false,
+        mustChangePassword: false,
+      })
       expect(await me(b)).toBeNull()
       expect((await postLogin({ username: 'josh', password: 'neuespass1' })).status).toBe(200)
       expect((await postLogin({ username: 'josh', password: 'geheim123' })).status).toBe(401)

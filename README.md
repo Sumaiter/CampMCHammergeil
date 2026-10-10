@@ -62,6 +62,14 @@ npm run dev
 
 `create-admin` ist ein TypeScript-Skript, das Node direkt ausführt – dafür ist Node ≥ 22.18 nötig.
 
+Passwortwechsel und Konto: Legt ein Admin einen Benutzer an oder setzt ein Passwort zurück, muss der
+Benutzer es beim nächsten Login ändern (`users.must_change_password`). Bis dahin antwortet die API
+auf alles außer `GET /api/auth/me`, `POST /api/auth/login|logout|password` und
+`DELETE /api/auth/account` mit `403` und `{ "code": "password_change_required" }`. Der per Skript
+angelegte erste Admin wählt sein Passwort selbst und ist davon nicht betroffen. Benutzer können ihr
+Konto selbst löschen (`DELETE /api/auth/account` mit `{ "password": … }`); der letzte Admin ist
+davon ausgenommen (`409`).
+
 Alle Befehle:
 
 ```sh

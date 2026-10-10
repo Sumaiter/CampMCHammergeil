@@ -94,8 +94,8 @@
         </p>
         <p>
           Sessions werden beim Logout gelöscht, spätestens nach 30 Tagen ungültig. Dein Konto und
-          alle zugehörigen Daten werden gelöscht, sobald der Administrator es entfernt – sprich ihn
-          dafür einfach an.
+          alle zugehörigen Daten kannst du jederzeit selbst löschen (Konto-Seite, „Konto löschen“).
+          Auch der Administrator kann dein Konto entfernen – sprich ihn dafür einfach an.
         </p>
       </section>
 

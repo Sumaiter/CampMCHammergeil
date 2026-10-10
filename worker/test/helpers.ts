@@ -37,11 +37,12 @@ export async function createUser(
   username: string,
   password: string,
   isAdmin = false,
+  mustChangePassword = false,
 ): Promise<number> {
   const row = await env.DB.prepare(
-    'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?) RETURNING id',
+    'INSERT INTO users (username, password_hash, is_admin, must_change_password) VALUES (?, ?, ?, ?) RETURNING id',
   )
-    .bind(username, await hashPassword(password), isAdmin ? 1 : 0)
+    .bind(username, await hashPassword(password), isAdmin ? 1 : 0, mustChangePassword ? 1 : 0)
     .first<{ id: number }>()
   return row!.id
 }
