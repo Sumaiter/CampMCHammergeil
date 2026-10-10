@@ -1,11 +1,22 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RoutePath } from '@/router/routePath'
+import { useAuth } from '@/auth/useAuth'
 
-const options = [
+const { user } = useAuth()
+
+const baseOptions = [
   { to: RoutePath.Shopping, icon: '🛍️', label: 'Einkaufen' },
   { to: RoutePath.ShoppingList, icon: '📝', label: 'Aktuelle Liste' },
   { to: RoutePath.ShoppingOverview, icon: '📊', label: 'Übersicht' },
 ]
+
+// Die Shopliste (Artikelverwaltung) sehen nur Admins.
+const options = computed(() =>
+  user.value?.isAdmin
+    ? [...baseOptions, { to: RoutePath.ShopItems, icon: '🗂️', label: 'Shopliste' }]
+    : baseOptions,
+)
 </script>
 
 <template>

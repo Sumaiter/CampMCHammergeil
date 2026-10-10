@@ -12,4 +12,5 @@ export enum RoutePath {
   Shopping = '/shopping',
   ShoppingList = '/shoppinglist',
   ShoppingOverview = '/shoppingoverview',
+  ShopItems = '/shopliste',
 }

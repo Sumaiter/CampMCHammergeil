@@ -4,6 +4,7 @@ import { HttpError } from './lib/validation'
 import { loadUser } from './middleware'
 import { authRoutes } from './routes/auth'
 import { adminRoutes } from './routes/admin'
+import { shopRoutes } from './routes/shop'
 
 const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE']
 
@@ -22,6 +23,7 @@ app.use('/api/*', loadUser)
 
 app.route('/api/auth', authRoutes)
 app.route('/api/admin', adminRoutes)
+app.route('/api/shop', shopRoutes)
 
 app.notFound((c) => c.json({ error: 'Nicht gefunden' }, 404))
 

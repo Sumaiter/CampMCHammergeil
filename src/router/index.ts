@@ -45,6 +45,11 @@ const routes = [
     component: () => import('@/components/Shop/ShoppingOverview.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: RoutePath.ShopItems,
+    component: () => import('@/components/Shop/ShopItemsAdminPage.vue'),
+    meta: { requiresAdmin: true },
+  },
 ]
 
 const router = createRouter({
