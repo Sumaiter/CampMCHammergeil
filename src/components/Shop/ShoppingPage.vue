@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
-import type { ShopItem } from '@/api/types'
+import type { ShopItem, ShopUser } from '@/api/types'
+import { useAuth } from '@/auth/useAuth'
 import { RoutePath } from '@/router/routePath'
 import { formatPrice } from './price'
 
+const { user } = useAuth()
+const meId = computed(() => user.value?.id ?? 0)
+
 const items = ref<ShopItem[]>([])
+const users = ref<ShopUser[]>([])
+const usersError = ref('')
+// Empfänger der Bestellung; vorbelegt mit mir selbst, sobald die Benutzer geladen sind
+const recipientId = ref<number | null>(null)
 const loading = ref(true)
 const loadError = ref('')
 
@@ -14,6 +22,8 @@ const quantities = ref<Record<number, number | string | null>>({})
 const submitting = ref(false)
 const submitError = ref('')
 const submitSuccess = ref(false)
+// Empfänger der zuletzt gespeicherten Bestellung, nur wenn es nicht ich selbst war
+const successRecipient = ref('')
 
 const errorText = (err: unknown, fallback: string) =>
   err instanceof ApiError ? err.message : fallback
@@ -29,6 +39,27 @@ async function loadItems() {
     loading.value = false
   }
 }
+
+async function loadUsers() {
+  try {
+    const data = await api.get<{ users: ShopUser[] }>('/api/shop/users')
+    users.value = data.users
+    recipientId.value ??= meId.value
+    usersError.value = ''
+  } catch (err) {
+    usersError.value = errorText(err, 'Benutzer konnten nicht geladen werden')
+  }
+}
+
+// "Mich selbst (name)" zuerst, danach alle anderen in Serverreihenfolge
+const recipientOptions = computed(() => {
+  const me = users.value.find((entry) => entry.id === meId.value)
+  const others = users.value.filter((entry) => entry.id !== meId.value)
+  return [
+    { id: meId.value, label: `Mich selbst (${me?.username ?? user.value?.username ?? ''})` },
+    ...others.map((entry) => ({ id: entry.id, label: entry.username })),
+  ]
+})
 
 function quantityOf(id: number): number {
   const value = Number(quantities.value[id])
@@ -52,10 +83,19 @@ async function submit() {
     return
   }
 
+  const other =
+    recipientId.value !== null && recipientId.value !== meId.value
+      ? users.value.find((entry) => entry.id === recipientId.value)
+      : undefined
+
   submitting.value = true
   try {
-    await api.post('/api/shop/orders', { items: selected })
+    await api.post('/api/shop/orders', {
+      ...(other ? { forUserId: other.id } : {}),
+      items: selected,
+    })
     quantities.value = {}
+    successRecipient.value = other?.username ?? ''
     submitSuccess.value = true
   } catch (err) {
     submitError.value = errorText(err, 'Bestellung konnte nicht gespeichert werden')
@@ -64,7 +104,10 @@ async function submit() {
   }
 }
 
-onMounted(loadItems)
+onMounted(() => {
+  void loadItems()
+  void loadUsers()
+})
 </script>
 
 <template>
@@ -75,6 +118,18 @@ onMounted(loadItems)
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
       <p v-else-if="!loading && items.length === 0" class="empty">
         Es sind noch keine Artikel verfügbar.
+      </p>
+
+      <label v-if="items.length > 0 && users.length > 0" class="form-field recipient">
+        <span>Für wen?</span>
+        <select v-model="recipientId" class="form-input">
+          <option v-for="option in recipientOptions" :key="option.id" :value="option.id">
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+      <p v-else-if="usersError" class="form-error" role="alert">
+        {{ usersError }} – du bestellst für dich selbst.
       </p>
 
       <ul v-if="items.length > 0" class="item-list">
@@ -102,7 +157,10 @@ onMounted(loadItems)
 
       <p v-if="submitError" class="form-error" role="alert">{{ submitError }}</p>
       <p v-if="submitSuccess" class="form-success" role="status">
-        Deine Bestellung wurde gespeichert.
+        <template v-if="successRecipient">
+          Die Bestellung für {{ successRecipient }} wurde gespeichert.
+        </template>
+        <template v-else>Deine Bestellung wurde gespeichert.</template>
         <router-link :to="RoutePath.ShoppingList">Zur aktuellen Liste</router-link>
       </p>
 
@@ -127,6 +185,11 @@ onMounted(loadItems)
 
 .empty {
   color: var(--c-text-muted);
+}
+
+.recipient select option {
+  background: #111a16;
+  color: var(--c-text);
 }
 
 .item-list {

@@ -5,16 +5,40 @@ import { api, createUser, login, resetDb } from './helpers'
 type Item = { id: number; name: string; priceCents: number | null }
 type Order = {
   id: number
+  itemId: number
   itemName: string
   priceCents: number | null
   quantity: number
   createdAt: string
+  userId: number
+  username: string
+  orderedById: number | null
+  orderedByName: string | null
+  listId: number | null
+  printedAt: string | null
 }
+type ListDetail = {
+  id: number
+  printedAt: string
+  printedByName: string | null
+  orders: Order[]
+}
+type ShopList = Omit<ListDetail, 'orders'> & {
+  orderCount: number
+  totalCents: number
+  unpricedCount: number
+}
+type Balance = { userId: number; username: string; totalCents: number; unpricedCount: number }
+
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
 
 describe('/api/shop', () => {
   let adminCookie: string
   let userCookie: string
   let otherCookie: string
+  let adminId: number
+  let userId: number
+  let otherId: number
 
   const listItems = async () =>
     ((await (await api('/api/shop/items', { cookie: userCookie })).json()) as { items: Item[] })
@@ -29,17 +53,50 @@ describe('/api/shop', () => {
   const updateItem = (id: number | string, body: unknown, cookie = adminCookie) =>
     api(`/api/shop/items/${id}`, { method: 'PUT', cookie, body })
 
-  const order = (items: unknown, cookie = userCookie) =>
-    api('/api/shop/orders', { method: 'POST', cookie, body: { items } })
+  const order = (items: unknown, cookie = userCookie, forUserId?: unknown) =>
+    api('/api/shop/orders', { method: 'POST', cookie, body: { items, forUserId } })
+
+  const getJson = async <T>(path: string, cookie = userCookie): Promise<T> =>
+    (await (await api(path, { cookie })).json()) as T
 
   const listOrders = async (cookie = userCookie) =>
-    ((await (await api('/api/shop/orders', { cookie })).json()) as { orders: Order[] }).orders
+    (await getJson<{ orders: Order[] }>('/api/shop/orders', cookie)).orders
+
+  const updateOrder = (id: number | string, body: unknown, cookie = userCookie) =>
+    api(`/api/shop/orders/${id}`, { method: 'PUT', cookie, body })
+
+  const deleteOrder = (id: number | string, cookie = userCookie) =>
+    api(`/api/shop/orders/${id}`, { method: 'DELETE', cookie })
+
+  const openOrders = async () =>
+    (await getJson<{ orders: Order[] }>('/api/shop/open-orders', adminCookie)).orders
+
+  const print = (cookie = adminCookie) =>
+    api('/api/shop/lists', { method: 'POST', cookie, body: {} })
+
+  const printList = async (): Promise<ListDetail> => {
+    const res = await print()
+    expect(res.status).toBe(201)
+    return ((await res.json()) as { list: ListDetail }).list
+  }
+
+  const getList = async (id: number) =>
+    (await getJson<{ list: ListDetail }>(`/api/shop/lists/${id}`, adminCookie)).list
+
+  const lists = async () =>
+    (await getJson<{ lists: ShopList[] }>('/api/shop/lists', adminCookie)).lists
+
+  const overview = async (cookie = userCookie, query = '') =>
+    (await getJson<{ orders: Order[] }>(`/api/shop/overview${query}`, cookie)).orders
+
+  const balances = async () =>
+    (await getJson<{ balances: Balance[] }>('/api/shop/balances', adminCookie)).balances
 
   beforeEach(async () => {
     await resetDb()
-    await createUser('boss', 'geheim123', true)
-    await createUser('josh', 'geheim123')
-    await createUser('anna', 'geheim123')
+    adminId = await createUser('boss', 'geheim123', true)
+    userId = await createUser('josh', 'geheim123')
+    otherId = await createUser('anna', 'geheim123')
     adminCookie = await login('boss', 'geheim123')
     userCookie = await login('josh', 'geheim123')
     otherCookie = await login('anna', 'geheim123')
@@ -58,6 +115,23 @@ describe('/api/shop', () => {
       expect((await api('/api/shop/orders', { method: 'POST', body: { items: [] } })).status).toBe(
         401,
       )
+      for (const path of ['users', 'open-orders', 'lists', 'lists/1', 'overview', 'balances']) {
+        expect((await api(`/api/shop/${path}`)).status).toBe(401)
+      }
+      expect(
+        (await api('/api/shop/orders/1', { method: 'PUT', body: { quantity: 1 } })).status,
+      ).toBe(401)
+      expect((await api('/api/shop/orders/1', { method: 'DELETE' })).status).toBe(401)
+      expect((await api('/api/shop/lists', { method: 'POST', body: {} })).status).toBe(401)
+    })
+
+    it('verbietet normalen Benutzern die Admin-Bereiche des Shops', async () => {
+      for (const path of ['open-orders', 'lists', 'lists/1', 'balances']) {
+        const res = await api(`/api/shop/${path}`, { cookie: userCookie })
+        expect(res.status).toBe(403)
+        expect(await res.json()).toEqual({ error: 'Keine Berechtigung' })
+      }
+      expect((await print(userCookie)).status).toBe(403)
     })
 
     it('verbietet normalen Benutzern das Anlegen und Ändern von Artikeln', async () => {
@@ -186,24 +260,36 @@ describe('/api/shop', () => {
       expect(res.status).toBe(201)
       expect(await res.json()).toEqual({ ok: true })
 
+      const own = {
+        userId,
+        username: 'josh',
+        orderedById: userId,
+        orderedByName: 'josh',
+        listId: null,
+        printedAt: null,
+      }
       const orders = await listOrders()
       expect(orders).toEqual([
         {
           id: expect.any(Number),
+          itemId: cola.id,
           itemName: 'Cola',
           priceCents: 150,
           quantity: 2,
           createdAt: expect.any(String),
+          ...own,
         },
         {
           id: expect.any(Number),
+          itemId: spende.id,
           itemName: 'Spende',
           priceCents: null,
           quantity: 1,
           createdAt: expect.any(String),
+          ...own,
         },
       ])
-      expect(orders[0]!.createdAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+      expect(orders[0]!.createdAt).toMatch(TIMESTAMP)
       expect(orders[0]!.createdAt).toBe(orders[1]!.createdAt)
     })
 
@@ -286,6 +372,360 @@ describe('/api/shop', () => {
         n: number
       }>()
       expect(left?.n).toBe(0)
+    })
+  })
+
+  describe('Einkaufen für andere, Listen und Übersicht', () => {
+    let cola: Item
+    let spende: Item
+
+    // Bestellt einen Artikel und liefert die ID der neuen Position.
+    const orderOne = async (
+      item: Item,
+      quantity = 1,
+      cookie = userCookie,
+      forUserId?: number | null,
+    ): Promise<number> => {
+      expect((await order([{ itemId: item.id, quantity }], cookie, forUserId)).status).toBe(201)
+      const row = await env.DB.prepare('SELECT MAX(id) AS id FROM shop_orders').first<{
+        id: number
+      }>()
+      return row!.id
+    }
+
+    beforeEach(async () => {
+      cola = await addItem('Cola', 150)
+      spende = await addItem('Spende')
+    })
+
+    describe('Benutzerliste', () => {
+      it('liefert alle Benutzer alphabetisch', async () => {
+        expect(await getJson('/api/shop/users')).toEqual({
+          users: [
+            { id: otherId, username: 'anna' },
+            { id: adminId, username: 'boss' },
+            { id: userId, username: 'josh' },
+          ],
+        })
+      })
+    })
+
+    describe('Bestellen für andere', () => {
+      it('zeigt die Position beiden, berechnet sie aber nur dem Empfänger', async () => {
+        await orderOne(cola, 2, userCookie, otherId)
+
+        const expected = {
+          itemName: 'Cola',
+          quantity: 2,
+          userId: otherId,
+          username: 'anna',
+          orderedById: userId,
+          orderedByName: 'josh',
+          listId: null,
+        }
+        expect(await listOrders(userCookie)).toEqual([expect.objectContaining(expected)])
+        expect(await listOrders(otherCookie)).toEqual([expect.objectContaining(expected)])
+        expect(await listOrders(adminCookie)).toEqual([])
+
+        const list = await printList()
+        expect(await overview(userCookie)).toEqual([
+          expect.objectContaining({ ...expected, listId: list.id }),
+        ])
+        expect(await overview(otherCookie)).toEqual([
+          expect.objectContaining({ ...expected, listId: list.id }),
+        ])
+        expect(await balances()).toEqual([
+          { userId: otherId, username: 'anna', totalCents: 300, unpricedCount: 0 },
+        ])
+      })
+
+      it('bestellt mit forUserId null für sich selbst', async () => {
+        await orderOne(cola, 1, userCookie, null)
+        expect(await listOrders()).toEqual([
+          expect.objectContaining({ userId, orderedById: userId }),
+        ])
+      })
+
+      it.each([9999, 0, -1, 1.5, '2', true])('lehnt Empfänger %j mit 400 ab', async (forUserId) => {
+        const res = await order([{ itemId: cola.id, quantity: 1 }], userCookie, forUserId)
+        expect(res.status).toBe(400)
+        expect(await res.json()).toEqual({ error: 'Unbekannter Benutzer' })
+        expect(await listOrders()).toEqual([])
+      })
+
+      it('behält die Position, wenn der Besteller sein Konto löscht', async () => {
+        await orderOne(cola, 1, userCookie, otherId)
+        const res = await api('/api/auth/account', {
+          method: 'DELETE',
+          cookie: userCookie,
+          body: { password: 'geheim123' },
+        })
+        expect(res.status).toBe(200)
+        expect(await listOrders(otherCookie)).toEqual([
+          expect.objectContaining({ userId: otherId, orderedById: null, orderedByName: null }),
+        ])
+      })
+    })
+
+    describe('Bestellung ändern und löschen', () => {
+      it('erlaubt Empfänger und Besteller, die Menge zu ändern', async () => {
+        const id = await orderOne(cola, 1, userCookie, otherId)
+
+        const byRecipient = await updateOrder(id, { quantity: 5 }, otherCookie)
+        expect(byRecipient.status).toBe(200)
+        expect(await byRecipient.json()).toEqual({
+          order: {
+            id,
+            itemId: cola.id,
+            itemName: 'Cola',
+            priceCents: 150,
+            quantity: 5,
+            createdAt: expect.stringMatching(TIMESTAMP),
+            userId: otherId,
+            username: 'anna',
+            orderedById: userId,
+            orderedByName: 'josh',
+            listId: null,
+            printedAt: null,
+          },
+        })
+
+        const byOrderer = await updateOrder(id, { quantity: 7 }, userCookie)
+        expect(byOrderer.status).toBe(200)
+        expect(((await byOrderer.json()) as { order: Order }).order.quantity).toBe(7)
+      })
+
+      it('erlaubt dem Empfänger das Löschen', async () => {
+        const id = await orderOne(cola, 1, userCookie, otherId)
+        const res = await deleteOrder(id, otherCookie)
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true })
+        expect(await listOrders()).toEqual([])
+      })
+
+      it('erlaubt dem Besteller das Löschen', async () => {
+        const id = await orderOne(cola, 1, userCookie, otherId)
+        expect((await deleteOrder(id, userCookie)).status).toBe(200)
+        expect(await listOrders(otherCookie)).toEqual([])
+      })
+
+      it('liefert unbeteiligten Benutzern (auch Admins) 404', async () => {
+        const id = await orderOne(cola, 2, userCookie, otherId)
+        for (const res of [
+          await updateOrder(id, { quantity: 3 }, adminCookie),
+          await deleteOrder(id, adminCookie),
+        ]) {
+          expect(res.status).toBe(404)
+          expect(await res.json()).toEqual({ error: 'Bestellung nicht gefunden' })
+        }
+        expect(await listOrders()).toEqual([expect.objectContaining({ id, quantity: 2 })])
+      })
+
+      it.each(['9999', 'abc', '0', '1.5'])('liefert für id %s 404', async (id) => {
+        expect((await updateOrder(id, { quantity: 1 })).status).toBe(404)
+        expect((await deleteOrder(id)).status).toBe(404)
+      })
+
+      it.each([0, 1000, 1.5, '2', null])('lehnt Menge %j mit 400 ab', async (quantity) => {
+        const id = await orderOne(cola, 2)
+        expect((await updateOrder(id, { quantity })).status).toBe(400)
+        expect(await listOrders()).toEqual([expect.objectContaining({ quantity: 2 })])
+      })
+
+      it('lehnt Änderungen nach dem Drucken mit 409 ab', async () => {
+        const id = await orderOne(cola, 2)
+        await printList()
+        for (const res of [await updateOrder(id, { quantity: 3 }), await deleteOrder(id)]) {
+          expect(res.status).toBe(409)
+          expect(await res.json()).toEqual({ error: 'Liste wurde bereits gedruckt' })
+        }
+        expect(await overview()).toEqual([expect.objectContaining({ id, quantity: 2 })])
+        // Unbeteiligte erfahren auch bei gedruckten Positionen nichts.
+        expect((await deleteOrder(id, otherCookie)).status).toBe(404)
+      })
+    })
+
+    describe('Offene Bestellungen (Admin)', () => {
+      it('liefert alle offenen Positionen sortiert nach Empfänger und Artikel', async () => {
+        await orderOne(spende, 1, userCookie)
+        await orderOne(cola, 1, userCookie)
+        await orderOne(cola, 3, otherCookie)
+        await orderOne(spende, 2, adminCookie, otherId)
+        expect((await openOrders()).map((o) => [o.username, o.itemName, o.quantity])).toEqual([
+          ['anna', 'Cola', 3],
+          ['anna', 'Spende', 2],
+          ['josh', 'Cola', 1],
+          ['josh', 'Spende', 1],
+        ])
+      })
+    })
+
+    describe('Liste drucken', () => {
+      it('verschiebt alle offenen Positionen in eine neue Liste', async () => {
+        await orderOne(cola, 2, userCookie)
+        await orderOne(spende, 1, otherCookie)
+
+        const res = await print()
+        expect(res.status).toBe(201)
+        const { list } = (await res.json()) as { list: ListDetail }
+        expect(list).toEqual({
+          id: expect.any(Number),
+          printedAt: expect.stringMatching(TIMESTAMP),
+          printedByName: 'boss',
+          orders: [
+            expect.objectContaining({ username: 'anna', itemName: 'Spende', priceCents: null }),
+            expect.objectContaining({ username: 'josh', itemName: 'Cola', priceCents: 150 }),
+          ],
+        })
+        for (const o of list.orders) {
+          expect(o.listId).toBe(list.id)
+          expect(o.printedAt).toBe(list.printedAt)
+        }
+
+        expect(await listOrders(userCookie)).toEqual([])
+        expect(await listOrders(otherCookie)).toEqual([])
+        expect(await openOrders()).toEqual([])
+        expect(await overview(userCookie)).toEqual([
+          expect.objectContaining({ itemName: 'Cola', listId: list.id, printedAt: list.printedAt }),
+        ])
+        expect(await getList(list.id)).toEqual(list)
+      })
+
+      it('schreibt den Preis beim Drucken fest, fehlende Preise werden nachgetragen', async () => {
+        await orderOne(cola, 2)
+        await orderOne(spende, 1)
+        const list = await printList()
+
+        await updateItem(cola.id, { name: 'Cola', priceCents: 200 })
+        await updateItem(spende.id, { name: 'Spende', priceCents: 50 })
+
+        expect((await getList(list.id)).orders.map((o) => [o.itemName, o.priceCents])).toEqual([
+          ['Cola', 150],
+          ['Spende', 50],
+        ])
+        expect((await lists())[0]).toMatchObject({ totalCents: 350, unpricedCount: 0 })
+
+        // Neue offene Positionen zeigen den aktuellen Preis.
+        await orderOne(cola, 1)
+        expect((await listOrders())[0]!.priceCents).toBe(200)
+      })
+
+      it('lehnt den Druck ohne offene Positionen mit 400 ab', async () => {
+        const res = await print()
+        expect(res.status).toBe(400)
+        expect(await res.json()).toEqual({ error: 'Keine offenen Bestellungen' })
+
+        await orderOne(cola)
+        await printList()
+        expect((await print()).status).toBe(400)
+        expect(await lists()).toHaveLength(1)
+      })
+
+      it('unterscheidet mehrere Drucke und lässt spätere Bestellungen offen', async () => {
+        await orderOne(cola)
+        const first = await printList()
+        await orderOne(spende, 2, otherCookie)
+        expect(await openOrders()).toHaveLength(1)
+        const second = await printList()
+
+        expect(second.id).not.toBe(first.id)
+        expect(first.orders.map((o) => o.itemName)).toEqual(['Cola'])
+        expect(second.orders.map((o) => o.itemName)).toEqual(['Spende'])
+        expect((await lists()).map((l) => [l.id, l.orderCount])).toEqual([
+          [second.id, 1],
+          [first.id, 1],
+        ])
+      })
+    })
+
+    describe('Alte Listen', () => {
+      it('liefert Summe und Anzahl der Positionen ohne Preis', async () => {
+        await orderOne(cola, 2, userCookie)
+        await orderOne(spende, 1, userCookie)
+        await orderOne(cola, 1, otherCookie)
+        const list = await printList()
+        expect(await lists()).toEqual([
+          {
+            id: list.id,
+            printedAt: list.printedAt,
+            printedByName: 'boss',
+            orderCount: 3,
+            totalCents: 450,
+            unpricedCount: 1,
+          },
+        ])
+      })
+
+      it('liefert ohne Listen eine leere Liste', async () => {
+        expect(await lists()).toEqual([])
+      })
+
+      it.each(['9999', 'abc', '0'])('liefert für Liste %s 404', async (id) => {
+        const res = await api(`/api/shop/lists/${id}`, { cookie: adminCookie })
+        expect(res.status).toBe(404)
+        expect(await res.json()).toEqual({ error: 'Liste nicht gefunden' })
+      })
+    })
+
+    describe('Übersicht', () => {
+      it('zeigt nur gedruckte Positionen, neueste Liste zuerst', async () => {
+        await orderOne(spende)
+        await orderOne(cola)
+        const first = await printList()
+        await orderOne(cola, 4)
+        const second = await printList()
+        await orderOne(spende, 9) // offen, gehört nicht in die Übersicht
+
+        expect((await overview()).map((o) => [o.listId, o.itemName, o.quantity])).toEqual([
+          [second.id, 'Cola', 4],
+          [first.id, 'Cola', 1],
+          [first.id, 'Spende', 1],
+        ])
+      })
+
+      it('verbietet normalen Benutzern fremde Übersichten', async () => {
+        const res = await api(`/api/shop/overview?userId=${otherId}`, { cookie: userCookie })
+        expect(res.status).toBe(403)
+        expect(await res.json()).toEqual({ error: 'Keine Berechtigung' })
+        const own = await api(`/api/shop/overview?userId=${userId}`, { cookie: userCookie })
+        expect(own.status).toBe(200)
+      })
+
+      it('lässt Admins die Übersicht anderer Benutzer sehen', async () => {
+        await orderOne(cola, 2)
+        await printList()
+        expect(await overview(adminCookie)).toEqual([])
+        expect(await overview(adminCookie, `?userId=${userId}`)).toEqual([
+          expect.objectContaining({ userId, itemName: 'Cola', quantity: 2 }),
+        ])
+      })
+
+      it('lehnt ungültige userId mit 400 ab', async () => {
+        const res = await api('/api/shop/overview?userId=abc', { cookie: adminCookie })
+        expect(res.status).toBe(400)
+      })
+    })
+
+    describe('Wer muss was zahlen', () => {
+      it('summiert pro Empfänger über alle Listen', async () => {
+        await orderOne(cola, 2, userCookie)
+        await orderOne(spende, 1, userCookie, otherId)
+        await printList()
+        await orderOne(cola, 1, otherCookie, userId)
+        await orderOne(cola, 3, userCookie, otherId)
+        await printList()
+        await orderOne(cola, 5, userCookie) // offen, zählt nicht
+
+        expect(await balances()).toEqual([
+          { userId: otherId, username: 'anna', totalCents: 450, unpricedCount: 1 },
+          { userId, username: 'josh', totalCents: 450, unpricedCount: 0 },
+        ])
+      })
+
+      it('liefert ohne gedruckte Positionen eine leere Liste', async () => {
+        await orderOne(cola)
+        expect(await balances()).toEqual([])
+      })
     })
   })
 })

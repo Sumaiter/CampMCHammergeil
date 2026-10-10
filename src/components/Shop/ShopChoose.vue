@@ -11,11 +11,15 @@ const baseOptions = [
   { to: RoutePath.ShoppingOverview, icon: '📊', label: 'Übersicht' },
 ]
 
-// Die Shopliste (Artikelverwaltung) sehen nur Admins.
+// Artikelverwaltung, Drucken und alte Listen sehen nur Admins.
+const adminOptions = [
+  { to: RoutePath.ShopItems, icon: '🗂️', label: 'Shopliste' },
+  { to: RoutePath.ShopPrint, icon: '🖨️', label: 'Liste drucken' },
+  { to: RoutePath.ShopLists, icon: '🗄️', label: 'Alte Listen' },
+]
+
 const options = computed(() =>
-  user.value?.isAdmin
-    ? [...baseOptions, { to: RoutePath.ShopItems, icon: '🗂️', label: 'Shopliste' }]
-    : baseOptions,
+  user.value?.isAdmin ? [...baseOptions, ...adminOptions] : baseOptions,
 )
 </script>
 

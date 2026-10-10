@@ -50,6 +50,21 @@ const routes = [
     component: () => import('@/components/Shop/ShopItemsAdminPage.vue'),
     meta: { requiresAdmin: true },
   },
+  {
+    path: RoutePath.ShopPrint,
+    component: () => import('@/components/Shop/ShopPrintPage.vue'),
+    meta: { requiresAdmin: true },
+  },
+  {
+    path: RoutePath.ShopLists,
+    component: () => import('@/components/Shop/ShopListsPage.vue'),
+    meta: { requiresAdmin: true },
+  },
+  {
+    path: `${RoutePath.ShopLists}/:id`,
+    component: () => import('@/components/Shop/ShopListDetailPage.vue'),
+    meta: { requiresAdmin: true },
+  },
 ]
 
 const router = createRouter({

@@ -13,4 +13,9 @@ export enum RoutePath {
   ShoppingList = '/shoppinglist',
   ShoppingOverview = '/shoppingoverview',
   ShopItems = '/shopliste',
+  ShopPrint = '/liste-drucken',
+  ShopLists = '/alte-listen',
 }
+
+// Detailseite einer gedruckten Liste
+export const shopListDetailPath = (id: number) => `${RoutePath.ShopLists}/${id}`

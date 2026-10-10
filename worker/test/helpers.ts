@@ -32,6 +32,7 @@ export function api(path: string, init: ApiInit = {}): Promise<Response> {
 export async function resetDb(): Promise<void> {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM shop_orders'),
+    env.DB.prepare('DELETE FROM shop_lists'),
     env.DB.prepare('DELETE FROM shop_items'),
     env.DB.prepare('DELETE FROM sessions'),
     env.DB.prepare('DELETE FROM users'),

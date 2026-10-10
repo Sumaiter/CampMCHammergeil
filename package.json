@@ -23,6 +23,8 @@
   "dependencies": {
     "@fontsource/metal-mania": "^5.3.0",
     "hono": "^4.13.13",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "vue": "^3.5.32",
     "vue-powerglitch": "^1.1.0",
     "vue-router": "^5.1.0"
