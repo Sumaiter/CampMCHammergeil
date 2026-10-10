@@ -70,7 +70,7 @@ onMounted(loadList)
           <template v-if="list.printedByName"> von {{ list.printedByName }}</template>
         </p>
 
-        <ShopListOrders :orders="list.orders" />
+        <ShopListOrders :orders="list.orders" editable @changed="loadList" />
 
         <p v-if="pdfError" class="form-error" role="alert">{{ pdfError }}</p>
         <button type="button" class="btn" :disabled="downloading" @click="downloadPdf">

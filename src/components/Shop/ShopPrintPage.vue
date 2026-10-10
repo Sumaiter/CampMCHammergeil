@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
 import type { ShopListDetail, ShopOrder } from '@/api/types'
 import { shopListDetailPath } from '@/router/routePath'
-import ShopListOrders from './ShopListOrders.vue'
+import ShopItemTotals from './ShopItemTotals.vue'
 import { downloadListPdf } from './pdf'
 
 const orders = ref<ShopOrder[]>([])
@@ -67,7 +67,7 @@ onMounted(loadOrders)
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
       <p v-else-if="empty" class="empty">Keine offenen Bestellungen.</p>
 
-      <ShopListOrders v-if="orders.length > 0" :orders="orders" />
+      <ShopItemTotals v-if="orders.length > 0" :orders="orders" />
 
       <p v-if="printError" class="form-error" role="alert">{{ printError }}</p>
       <p v-if="printedList" class="form-success" role="status">

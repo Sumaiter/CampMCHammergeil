@@ -5,6 +5,7 @@ import type { ShopBalance, ShopOrder, ShopUser } from '@/api/types'
 import { useAuth } from '@/auth/useAuth'
 import { RoutePath } from '@/router/routePath'
 import { formatPrice } from './price'
+import { useOrderEdit } from './useOrderEdit'
 import {
   formatDateTime,
   formatLineTotal,
@@ -62,6 +63,20 @@ async function loadOverview() {
     if (token === loadToken) loading.value = false
   }
 }
+
+// Admin: gedruckte Positionen ändern/löschen, danach Übersicht (und Beträge) neu laden
+async function reloadAfterEdit() {
+  await loadOverview()
+  if (showBalances.value) await loadBalances()
+}
+
+const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = useOrderEdit({
+  basePath: '/api/shop/printed-orders',
+  onSaved: reloadAfterEdit,
+  onRemoved: reloadAfterEdit,
+  onStale: reloadAfterEdit,
+})
+watch(orders, syncDrafts, { immediate: true })
 
 async function loadUsers() {
   try {
@@ -212,6 +227,7 @@ onMounted(() => {
                 <th class="num">Einzelpreis</th>
                 <th class="num">Summe</th>
                 <th>Bestellt</th>
+                <th v-if="isAdmin"><span class="sr-only">Aktionen</span></th>
               </tr>
             </thead>
             <tbody>
@@ -224,14 +240,49 @@ onMounted(() => {
                     </small>
                   </span>
                 </td>
-                <td data-label="Anzahl" class="num">{{ order.quantity }}</td>
+                <td data-label="Anzahl" class="num">
+                  <input
+                    v-if="isAdmin"
+                    v-model="drafts[order.id]"
+                    class="form-input qty-input"
+                    type="number"
+                    inputmode="numeric"
+                    min="1"
+                    max="999"
+                    step="1"
+                    :aria-label="`Anzahl für ${order.itemName}`"
+                    :disabled="busyId === order.id"
+                  />
+                  <template v-else>{{ order.quantity }}</template>
+                </td>
                 <td data-label="Einzelpreis" class="num">{{ formatPrice(order.priceCents) }}</td>
                 <td data-label="Summe" class="num">{{ formatLineTotal(order) }}</td>
                 <td data-label="Bestellt" class="date">{{ formatDateTime(order.createdAt) }}</td>
+                <td v-if="isAdmin" class="actions">
+                  <button
+                    v-if="isChanged(order)"
+                    type="button"
+                    class="btn btn-small"
+                    :disabled="busyId === order.id"
+                    @click="save(order)"
+                  >
+                    Speichern
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-small btn-danger"
+                    :disabled="busyId === order.id"
+                    @click="remove(order)"
+                  >
+                    Löschen
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <p v-if="isAdmin && actionError" class="form-error" role="alert">{{ actionError }}</p>
 
         <p class="total">
           <span>Summe dieser Liste</span>
@@ -320,6 +371,25 @@ select.form-input option {
     color: var(--c-text-muted);
     white-space: nowrap;
   }
+
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    border-bottom: 0;
+  }
+}
+
+.qty-input {
+  width: 5.5rem;
+  min-height: 40px;
+  padding: 0.4rem 0.6rem;
+  text-align: right;
+}
+
+.btn-danger {
+  border-color: rgba(255, 138, 138, 0.5);
+  color: #ff8a8a;
 }
 
 .order-hint {
@@ -371,7 +441,7 @@ select.form-input option {
     td {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
+      align-items: center;
       gap: 1rem;
       padding: 0.2rem 0;
       border: 0;
@@ -389,6 +459,18 @@ select.form-input option {
 
       .name-text {
         align-items: flex-end;
+      }
+    }
+
+    .actions {
+      padding-top: 0.5rem;
+
+      &::before {
+        content: none;
+      }
+
+      .btn {
+        flex: 1 1 auto;
       }
     }
   }

@@ -1,10 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import type { ShopOrder } from '@/api/types'
 import { grandTotal, groupByRecipient, lineTotal, orderedByHint } from './listData'
 import { formatPrice } from './price'
+import { useOrderEdit } from './useOrderEdit'
 
-const props = defineProps<{ orders: ShopOrder[] }>()
+// editable: Admin kann gedruckte Positionen ändern/löschen ("changed" -> Elternseite lädt neu)
+const props = defineProps<{ orders: ShopOrder[]; editable?: boolean }>()
+const emit = defineEmits<{ changed: [] }>()
+
+const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = useOrderEdit({
+  basePath: '/api/shop/printed-orders',
+  onSaved: () => emit('changed'),
+  onRemoved: () => emit('changed'),
+  onStale: () => emit('changed'),
+})
+watch(() => props.orders, syncDrafts, { immediate: true })
 
 const groups = computed(() => groupByRecipient(props.orders))
 const total = computed(() => grandTotal(props.orders))
@@ -30,6 +41,7 @@ const formatUnit = (order: ShopOrder) =>
               <th class="num">Menge</th>
               <th class="num">Preis</th>
               <th class="num">Summe</th>
+              <th v-if="editable"><span class="sr-only">Aktionen</span></th>
             </tr>
           </thead>
           <tbody>
@@ -42,9 +54,42 @@ const formatUnit = (order: ShopOrder) =>
                   </small>
                 </span>
               </td>
-              <td data-label="Menge" class="num">{{ order.quantity }}</td>
+              <td data-label="Menge" class="num">
+                <input
+                  v-if="editable"
+                  v-model="drafts[order.id]"
+                  class="form-input qty-input"
+                  type="number"
+                  inputmode="numeric"
+                  min="1"
+                  max="999"
+                  step="1"
+                  :aria-label="`Menge für ${order.itemName}`"
+                  :disabled="busyId === order.id"
+                />
+                <template v-else>{{ order.quantity }}</template>
+              </td>
               <td data-label="Preis" class="num">{{ formatUnit(order) }}</td>
               <td data-label="Summe" class="num">{{ formatLineTotal(order) }}</td>
+              <td v-if="editable" class="actions">
+                <button
+                  v-if="isChanged(order)"
+                  type="button"
+                  class="btn btn-small"
+                  :disabled="busyId === order.id"
+                  @click="save(order)"
+                >
+                  Speichern
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-small btn-danger"
+                  :disabled="busyId === order.id"
+                  @click="remove(order)"
+                >
+                  Löschen
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -58,6 +103,8 @@ const formatUnit = (order: ShopOrder) =>
         <strong>{{ formatPrice(group.totalCents) }}</strong>
       </p>
     </section>
+
+    <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
 
     <p class="total">
       <span>Gesamtsumme</span>
@@ -132,6 +179,31 @@ const formatUnit = (order: ShopOrder) =>
   .name {
     overflow-wrap: anywhere;
   }
+
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    border-bottom: 0;
+  }
+}
+
+.qty-input {
+  width: 5.5rem;
+  min-height: 40px;
+  padding: 0.4rem 0.6rem;
+  text-align: right;
+}
+
+.btn-danger {
+  border-color: rgba(255, 138, 138, 0.5);
+  color: #ff8a8a;
+}
+
+.btn-small {
+  min-height: 40px;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
 }
 
 .subtotal,
@@ -184,6 +256,7 @@ const formatUnit = (order: ShopOrder) =>
     td {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       gap: 1rem;
       padding: 0.2rem 0;
       border: 0;
@@ -198,6 +271,18 @@ const formatUnit = (order: ShopOrder) =>
 
     .name {
       font-weight: 700;
+    }
+
+    .actions {
+      padding-top: 0.5rem;
+
+      &::before {
+        content: none;
+      }
+
+      .btn {
+        flex: 1 1 auto;
+      }
     }
   }
 }

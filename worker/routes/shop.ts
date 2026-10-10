@@ -302,6 +302,33 @@ shopRoutes.delete('/orders/:id', requireUser, async (c) => {
   return c.json({ ok: true })
 })
 
+// Admin-Korrektur gedruckter Positionen; der festgeschriebene Preis (price_cents) bleibt unberührt.
+shopRoutes.put('/printed-orders/:id', requireAdmin, async (c) => {
+  const id = parseId(c.req.param('id'), ORDER_NOT_FOUND)
+  const body = await readJson<{ quantity: unknown }>(c)
+  const quantity = validateQuantity(body.quantity)
+  const db = c.env.DB
+
+  const { meta } = await db
+    .prepare('UPDATE shop_orders SET quantity = ? WHERE id = ? AND list_id IS NOT NULL')
+    .bind(quantity, id)
+    .run()
+  if (meta.changes === 0) throw new HttpError(404, ORDER_NOT_FOUND)
+  const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>()
+  return c.json({ order: toOrder(row!) })
+})
+
+shopRoutes.delete('/printed-orders/:id', requireAdmin, async (c) => {
+  const id = parseId(c.req.param('id'), ORDER_NOT_FOUND)
+  const { meta } = await c.env.DB.prepare(
+    'DELETE FROM shop_orders WHERE id = ? AND list_id IS NOT NULL',
+  )
+    .bind(id)
+    .run()
+  if (meta.changes === 0) throw new HttpError(404, ORDER_NOT_FOUND)
+  return c.json({ ok: true })
+})
+
 shopRoutes.get('/open-orders', requireAdmin, async (c) => {
   const { results } = await c.env.DB.prepare(
     `${ORDER_SELECT} WHERE o.list_id IS NULL ${BY_RECIPIENT}`,

@@ -55,3 +55,19 @@ Bestehend, unverändert: `GET/POST /items`, `PUT /items/:id`.
 | `GET /balances` | Admin | – | `{ balances: ShopBalance[] }` pro Empfänger über alle gedruckten Listen, nur Benutzer mit Positionen, alphabetisch |
 
 Hinweis: Der Client (`src/api/client.ts`) schickt bei DELETE immer `Content-Type: application/json`.
+
+## Änderung 2026-10-10: Drucken zusammengefasst, gedruckte Listen bearbeitbar
+
+- **PDF und Druckvorschau** (`Liste drucken`) zeigen nur noch die Summe **pro Artikel** über alle Personen
+  (Artikel, Menge, Einzelpreis, Summe) plus Gesamtsumme – keine Aufteilung nach Personen mehr.
+- **Pro Person** bleibt die Ansicht in der **Übersicht** und in der Detailseite unter **Alte Listen**.
+- Ein Admin kann **gedruckte** Positionen nachträglich ändern (Menge) oder löschen, z. B. wenn etwas nicht
+  geholt werden konnte – in der Detailseite einer alten Liste und in der Übersicht (Admin-Ansicht).
+  Der festgeschriebene Preis bleibt dabei unverändert. Ein erneuter PDF-Download spiegelt die Änderungen.
+
+| Methode + Pfad | Recht | Body | Antwort |
+|---|---|---|---|
+| `PUT /printed-orders/:id` | Admin | `{ quantity }` (1..999) | `{ order: ShopOrder }`; Position unbekannt oder noch offen (`list_id IS NULL`) → 404 `'Bestellung nicht gefunden'` |
+| `DELETE /printed-orders/:id` | Admin | – | `{ ok: true }`; gleiche 404-Regel |
+
+Eine Liste, deren Positionen alle gelöscht wurden, bleibt mit 0 Positionen bestehen.

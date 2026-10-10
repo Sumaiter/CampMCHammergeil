@@ -123,6 +123,10 @@ describe('/api/shop', () => {
       ).toBe(401)
       expect((await api('/api/shop/orders/1', { method: 'DELETE' })).status).toBe(401)
       expect((await api('/api/shop/lists', { method: 'POST', body: {} })).status).toBe(401)
+      expect(
+        (await api('/api/shop/printed-orders/1', { method: 'PUT', body: { quantity: 1 } })).status,
+      ).toBe(401)
+      expect((await api('/api/shop/printed-orders/1', { method: 'DELETE' })).status).toBe(401)
     })
 
     it('verbietet normalen Benutzern die Admin-Bereiche des Shops', async () => {
@@ -704,6 +708,135 @@ describe('/api/shop', () => {
         const res = await api('/api/shop/overview?userId=abc', { cookie: adminCookie })
         expect(res.status).toBe(400)
       })
+    })
+
+    describe('Gedruckte Positionen bearbeiten (Admin)', () => {
+      const updatePrinted = (id: number | string, body: unknown, cookie = adminCookie) =>
+        api(`/api/shop/printed-orders/${id}`, { method: 'PUT', cookie, body })
+
+      const deletePrinted = (id: number | string, cookie = adminCookie) =>
+        api(`/api/shop/printed-orders/${id}`, { method: 'DELETE', cookie })
+
+      it('verbietet normalen Benutzern das Ändern und Löschen', async () => {
+        const id = await orderOne(cola, 2)
+        const list = await printList()
+
+        const put = await updatePrinted(id, { quantity: 1 }, userCookie)
+        expect(put.status).toBe(403)
+        expect(await put.json()).toEqual({ error: 'Keine Berechtigung' })
+        expect((await deletePrinted(id, userCookie)).status).toBe(403)
+        expect((await getList(list.id)).orders).toEqual(list.orders)
+      })
+
+      it('ändert die Menge und lässt den festgeschriebenen Preis unverändert', async () => {
+        await orderOne(cola, 2, userCookie)
+        const spendeId = await orderOne(spende, 1, userCookie)
+        const colaOther = await orderOne(cola, 1, otherCookie)
+        const list = await printList()
+        const colaId = list.orders.find((o) => o.username === 'josh' && o.itemName === 'Cola')!.id
+
+        await updateItem(cola.id, { name: 'Cola', priceCents: 999 })
+        const res = await updatePrinted(colaId, { quantity: 5 })
+        expect(res.status).toBe(200)
+        const { order } = (await res.json()) as { order: Order }
+        expect(order).toMatchObject({
+          id: colaId,
+          quantity: 5,
+          priceCents: 150,
+          listId: list.id,
+          printedAt: list.printedAt,
+          username: 'josh',
+        })
+
+        expect(
+          (await getList(list.id)).orders.map((o) => [o.id, o.quantity, o.priceCents]),
+        ).toEqual([
+          [colaOther, 1, 150],
+          [colaId, 5, 150],
+          [spendeId, 1, null],
+        ])
+        expect((await lists())[0]).toMatchObject({
+          orderCount: 3,
+          totalCents: 5 * 150 + 150,
+          unpricedCount: 1,
+        })
+        expect((await overview()).find((o) => o.id === colaId)).toMatchObject({
+          quantity: 5,
+          priceCents: 150,
+        })
+        expect(await balances()).toEqual([
+          { userId: otherId, username: 'anna', totalCents: 150, unpricedCount: 0 },
+          { userId, username: 'josh', totalCents: 750, unpricedCount: 1 },
+        ])
+      })
+
+      it('löscht eine gedruckte Position', async () => {
+        await orderOne(cola, 2, userCookie)
+        await orderOne(spende, 1, otherCookie)
+        const list = await printList()
+        const colaId = list.orders.find((o) => o.itemName === 'Cola')!.id
+
+        const res = await deletePrinted(colaId)
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true })
+
+        expect((await getList(list.id)).orders.map((o) => o.itemName)).toEqual(['Spende'])
+        expect(await overview()).toEqual([])
+        expect(await balances()).toEqual([
+          { userId: otherId, username: 'anna', totalCents: 0, unpricedCount: 1 },
+        ])
+        expect((await lists())[0]).toMatchObject({ orderCount: 1, totalCents: 0, unpricedCount: 1 })
+        expect((await deletePrinted(colaId)).status).toBe(404)
+      })
+
+      it('lässt eine Liste ohne Positionen mit 0 Positionen bestehen', async () => {
+        const a = await orderOne(cola, 2)
+        const b = await orderOne(spende, 1)
+        const list = await printList()
+        expect((await deletePrinted(a)).status).toBe(200)
+        expect((await deletePrinted(b)).status).toBe(200)
+
+        expect(await lists()).toEqual([
+          {
+            id: list.id,
+            printedAt: list.printedAt,
+            printedByName: 'boss',
+            orderCount: 0,
+            totalCents: 0,
+            unpricedCount: 0,
+          },
+        ])
+        expect((await getList(list.id)).orders).toEqual([])
+        expect(await balances()).toEqual([])
+      })
+
+      it('liefert für noch offene Positionen 404 und lässt sie unverändert', async () => {
+        const id = await orderOne(cola, 2)
+        for (const res of [await updatePrinted(id, { quantity: 3 }), await deletePrinted(id)]) {
+          expect(res.status).toBe(404)
+          expect(await res.json()).toEqual({ error: 'Bestellung nicht gefunden' })
+        }
+        expect((await openOrders()).map((o) => [o.id, o.quantity])).toEqual([[id, 2]])
+      })
+
+      it.each(['9999', 'abc', '0'])('liefert für unbekannte Position %s 404', async (id) => {
+        for (const res of [await updatePrinted(id, { quantity: 1 }), await deletePrinted(id)]) {
+          expect(res.status).toBe(404)
+          expect(await res.json()).toEqual({ error: 'Bestellung nicht gefunden' })
+        }
+      })
+
+      it.each([0, -1, 1000, 1.5, '2', null, undefined])(
+        'lehnt die Menge %j mit 400 ab',
+        async (quantity) => {
+          const id = await orderOne(cola, 2)
+          await printList()
+          const res = await updatePrinted(id, { quantity })
+          expect(res.status).toBe(400)
+          expect(await res.json()).toEqual({ error: 'Menge muss zwischen 1 und 999 liegen' })
+          expect((await overview())[0]!.quantity).toBe(2)
+        },
+      )
     })
 
     describe('Wer muss was zahlen', () => {

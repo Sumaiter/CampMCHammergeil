@@ -5,6 +5,7 @@ import type { ShopOrder } from '@/api/types'
 import { useAuth } from '@/auth/useAuth'
 import { RoutePath } from '@/router/routePath'
 import { formatPrice } from './price'
+import { useOrderEdit } from './useOrderEdit'
 import { formatDateTime, formatLineTotal, orderHint, ownTotal } from './user-orders'
 
 const { user } = useAuth()
@@ -13,12 +14,6 @@ const meId = computed(() => user.value?.id ?? 0)
 const orders = ref<ShopOrder[]>([])
 const loading = ref(true)
 const loadError = ref('')
-const actionError = ref('')
-// Zeile, die gerade gespeichert oder gelöscht wird
-const busyId = ref<number | null>(null)
-
-// Eingaben im Mengenfeld pro Bestell-ID (vorbelegt mit der gespeicherten Menge)
-const drafts = ref<Record<number, number | string | null>>({})
 
 const errorText = (err: unknown, fallback: string) =>
   err instanceof ApiError ? err.message : fallback
@@ -26,72 +21,29 @@ const errorText = (err: unknown, fallback: string) =>
 const own = computed(() => ownTotal(orders.value, meId.value))
 const hasOthers = computed(() => orders.value.some((order) => order.userId !== meId.value))
 
+// Bei 404/409 ist die Position nicht mehr offen (gedruckt oder gelöscht) -> Liste neu laden
+const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = useOrderEdit({
+  basePath: '/api/shop/orders',
+  onSaved: (order) => {
+    const index = orders.value.findIndex((entry) => entry.id === order.id)
+    if (index !== -1) orders.value[index] = order
+  },
+  onRemoved: (order) => {
+    orders.value = orders.value.filter((entry) => entry.id !== order.id)
+  },
+  onStale: () => loadOrders(),
+})
+
 async function loadOrders() {
   try {
     const data = await api.get<{ orders: ShopOrder[] }>('/api/shop/orders')
     orders.value = data.orders
-    drafts.value = Object.fromEntries(data.orders.map((order) => [order.id, order.quantity]))
+    syncDrafts(data.orders)
     loadError.value = ''
   } catch (err) {
     loadError.value = errorText(err, 'Bestellungen konnten nicht geladen werden')
   } finally {
     loading.value = false
-  }
-}
-
-// Gültige Menge (1..999) aus dem Eingabefeld, sonst null
-function draftQuantity(order: ShopOrder): number | null {
-  const raw = drafts.value[order.id] ?? order.quantity
-  const value = Number(raw)
-  return raw !== '' && raw !== null && Number.isInteger(value) && value >= 1 && value <= 999
-    ? value
-    : null
-}
-
-const isChanged = (order: ShopOrder) => draftQuantity(order) !== order.quantity
-
-// Bei 404/409 ist die Position nicht mehr offen (gedruckt oder gelöscht) -> Liste neu laden
-async function handleActionError(err: unknown, fallback: string) {
-  actionError.value = errorText(err, fallback)
-  if (err instanceof ApiError && (err.status === 404 || err.status === 409)) {
-    await loadOrders()
-  }
-}
-
-async function save(order: ShopOrder) {
-  actionError.value = ''
-  const quantity = draftQuantity(order)
-  if (quantity === null) {
-    actionError.value = 'Die Anzahl muss zwischen 1 und 999 liegen.'
-    return
-  }
-
-  busyId.value = order.id
-  try {
-    const data = await api.put<{ order: ShopOrder }>(`/api/shop/orders/${order.id}`, { quantity })
-    const index = orders.value.findIndex((entry) => entry.id === order.id)
-    if (index !== -1) orders.value[index] = data.order
-    drafts.value[order.id] = data.order.quantity
-  } catch (err) {
-    await handleActionError(err, 'Anzahl konnte nicht gespeichert werden')
-  } finally {
-    busyId.value = null
-  }
-}
-
-async function remove(order: ShopOrder) {
-  if (!confirm(`„${order.itemName}“ wirklich von der Liste löschen?`)) return
-  actionError.value = ''
-
-  busyId.value = order.id
-  try {
-    await api.delete(`/api/shop/orders/${order.id}`)
-    orders.value = orders.value.filter((entry) => entry.id !== order.id)
-    delete drafts.value[order.id]
-  } catch (err) {
-    await handleActionError(err, 'Bestellung konnte nicht gelöscht werden')
-  } finally {
-    busyId.value = null
   }
 }
 
