@@ -11,8 +11,7 @@
     {
       "binding": "DB",
       "database_name": "campmchammergeil",
-      // Platzhalter – wird beim Einrichten durch die echte ID aus `wrangler d1 create` ersetzt
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "384ba822-e79a-4150-82be-ff80f63efdc1",
       "migrations_dir": "migrations"
     }
   ],
