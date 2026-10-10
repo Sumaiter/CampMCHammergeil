@@ -5,7 +5,9 @@ import { hashPassword } from '../lib/password'
 import { deleteUserSessions } from '../lib/session'
 import {
   HttpError,
+  isUniqueError,
   normalizeUsername,
+  parseId,
   readJson,
   validatePassword,
   validateUsername,
@@ -28,17 +30,11 @@ export async function deleteUserUnlessLastAdmin(db: D1Database, id: number): Pro
   return meta.changes > 0
 }
 
-function parseId(value: string): number {
-  const id = Number(value)
-  if (!Number.isInteger(id) || id <= 0) throw new HttpError(404, NOT_FOUND)
-  return id
-}
-
-async function findUser(db: D1Database, id: number): Promise<UserRow> {
+async function findUser(db: D1Database, rawId: string): Promise<{ id: number }> {
   const row = await db
-    .prepare('SELECT id, username, is_admin, created_at FROM users WHERE id = ?')
-    .bind(id)
-    .first<UserRow>()
+    .prepare('SELECT id FROM users WHERE id = ?')
+    .bind(parseId(rawId, NOT_FOUND))
+    .first<{ id: number }>()
   if (!row) throw new HttpError(404, NOT_FOUND)
   return row
 }
@@ -76,7 +72,7 @@ adminRoutes.post('/users', async (c) => {
       .bind(username, await hashPassword(password), isAdmin ? 1 : 0)
       .first<{ id: number }>()
   } catch (err) {
-    if (err instanceof Error && /UNIQUE/.test(err.message)) {
+    if (isUniqueError(err)) {
       throw new HttpError(409, 'Benutzername ist bereits vergeben')
     }
     throw err
@@ -86,7 +82,7 @@ adminRoutes.post('/users', async (c) => {
 })
 
 adminRoutes.delete('/users/:id', async (c) => {
-  const target = await findUser(c.env.DB, parseId(c.req.param('id')))
+  const target = await findUser(c.env.DB, c.req.param('id'))
   if (target.id === c.var.user!.id) {
     throw new HttpError(403, 'Du kannst dein eigenes Konto nicht löschen')
   }
@@ -97,7 +93,7 @@ adminRoutes.delete('/users/:id', async (c) => {
 })
 
 adminRoutes.post('/users/:id/password', async (c) => {
-  const target = await findUser(c.env.DB, parseId(c.req.param('id')))
+  const target = await findUser(c.env.DB, c.req.param('id'))
   const body = await readJson<{ password: unknown }>(c)
   const password = validatePassword(body.password)
 

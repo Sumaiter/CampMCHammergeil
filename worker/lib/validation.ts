@@ -28,10 +28,23 @@ export async function readJson<T extends Record<string, unknown>>(c: Context): P
   return body as Partial<T>
 }
 
+// Positive ganze Zahl aus einem Pfadparameter, sonst 404 mit der übergebenen Meldung.
+export function parseId(value: string, notFound: string): number {
+  const id = Number(value)
+  if (!Number.isInteger(id) || id <= 0) throw new HttpError(404, notFound)
+  return id
+}
+
+export const isUniqueError = (err: unknown): boolean =>
+  err instanceof Error && /UNIQUE/.test(err.message)
+
+// Nicht-Strings (fehlende Felder, falsche Typen) werden zum leeren String.
+export const asText = (value: unknown): string => (typeof value === 'string' ? value : '')
+
 const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,32}$/
 
 export function normalizeUsername(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
+  return asText(value).trim()
 }
 
 export function validateUsername(name: string): void {

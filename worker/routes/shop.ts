@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../types'
 import { requireAdmin, requireUser } from '../middleware'
-import { HttpError, readJson } from '../lib/validation'
+import { HttpError, isUniqueError, parseId, readJson } from '../lib/validation'
 
 type ItemRow = { id: number; name: string; price_cents: number | null }
 type OrderRow = {
@@ -94,16 +94,6 @@ function validateQuantity(value: unknown): number {
 const isPositiveInt = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value > 0
 
-function parseId(value: string, notFound: string): number {
-  const id = Number(value)
-  if (!Number.isInteger(id) || id <= 0) throw new HttpError(404, notFound)
-  return id
-}
-
-function isUniqueError(err: unknown): boolean {
-  return err instanceof Error && /UNIQUE/.test(err.message)
-}
-
 // Wirft 404, wenn die Position fehlt oder den Benutzer nichts angeht, und 409, wenn sie schon gedruckt ist.
 async function assertEditableOrder(db: D1Database, id: number, userId: number): Promise<void> {
   const row = await db
@@ -117,24 +107,24 @@ async function assertEditableOrder(db: D1Database, id: number, userId: number): 
 }
 
 async function loadListDetail(db: D1Database, id: number) {
-  const list = await db
-    .prepare(
-      `SELECT l.id, l.printed_at, pb.username AS printed_by_name
-         FROM shop_lists l LEFT JOIN users pb ON pb.id = l.printed_by
-        WHERE l.id = ?`,
-    )
-    .bind(id)
-    .first<ListRow>()
+  // Liste und Positionen in einem Round-Trip.
+  const [listResult, ordersResult] = await db.batch<ListRow | OrderRow>([
+    db
+      .prepare(
+        `SELECT l.id, l.printed_at, pb.username AS printed_by_name
+           FROM shop_lists l LEFT JOIN users pb ON pb.id = l.printed_by
+          WHERE l.id = ?`,
+      )
+      .bind(id),
+    db.prepare(`${ORDER_SELECT} WHERE o.list_id = ? ${BY_RECIPIENT}`).bind(id),
+  ])
+  const list = listResult!.results[0] as ListRow | undefined
   if (!list) throw new HttpError(404, LIST_NOT_FOUND)
-  const { results } = await db
-    .prepare(`${ORDER_SELECT} WHERE o.list_id = ? ${BY_RECIPIENT}`)
-    .bind(id)
-    .all<OrderRow>()
   return {
     id: list.id,
     printedAt: list.printed_at,
     printedByName: list.printed_by_name,
-    orders: results.map(toOrder),
+    orders: (ordersResult!.results as OrderRow[]).map(toOrder),
   }
 }
 
@@ -267,26 +257,26 @@ shopRoutes.put('/orders/:id', requireUser, async (c) => {
   const body = await readJson<{ quantity: unknown }>(c)
   const quantity = validateQuantity(body.quantity)
 
-  const { meta } = await db
-    .prepare(
-      `UPDATE shop_orders SET quantity = ?
-        WHERE id = ? AND list_id IS NULL AND (user_id = ? OR ordered_by_user_id = ?)`,
-    )
-    .bind(quantity, id, me, me)
-    .run()
-  if (meta.changes === 0) {
+  const [updated, loaded] = await db.batch<OrderRow>([
+    db
+      .prepare(
+        `UPDATE shop_orders SET quantity = ?
+          WHERE id = ? AND list_id IS NULL AND (user_id = ? OR ordered_by_user_id = ?)`,
+      )
+      .bind(quantity, id, me, me),
+    db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id),
+  ])
+  if (updated!.meta.changes === 0) {
     await assertEditableOrder(db, id, me)
     throw new HttpError(409, ALREADY_PRINTED)
   }
-  const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>()
-  return c.json({ order: toOrder(row!) })
+  return c.json({ order: toOrder(loaded!.results[0]!) })
 })
 
 shopRoutes.delete('/orders/:id', requireUser, async (c) => {
   const id = parseId(c.req.param('id'), ORDER_NOT_FOUND)
   const me = c.var.user!.id
   const db = c.env.DB
-  await assertEditableOrder(db, id, me)
 
   const { meta } = await db
     .prepare(
@@ -309,13 +299,14 @@ shopRoutes.put('/printed-orders/:id', requireAdmin, async (c) => {
   const quantity = validateQuantity(body.quantity)
   const db = c.env.DB
 
-  const { meta } = await db
-    .prepare('UPDATE shop_orders SET quantity = ? WHERE id = ? AND list_id IS NOT NULL')
-    .bind(quantity, id)
-    .run()
-  if (meta.changes === 0) throw new HttpError(404, ORDER_NOT_FOUND)
-  const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>()
-  return c.json({ order: toOrder(row!) })
+  const [updated, loaded] = await db.batch<OrderRow>([
+    db
+      .prepare('UPDATE shop_orders SET quantity = ? WHERE id = ? AND list_id IS NOT NULL')
+      .bind(quantity, id),
+    db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id),
+  ])
+  if (updated!.meta.changes === 0) throw new HttpError(404, ORDER_NOT_FOUND)
+  return c.json({ order: toOrder(loaded!.results[0]!) })
 })
 
 shopRoutes.delete('/printed-orders/:id', requireAdmin, async (c) => {

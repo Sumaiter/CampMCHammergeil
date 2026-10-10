@@ -10,8 +10,9 @@ import {
   deleteUserSessions,
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
+  toUser,
 } from '../lib/session'
-import { HttpError, normalizeUsername, readJson, validatePassword } from '../lib/validation'
+import { asText, HttpError, normalizeUsername, readJson, validatePassword } from '../lib/validation'
 
 const LOGIN_FAILED = 'Benutzername oder Passwort falsch'
 
@@ -29,6 +30,15 @@ type UserRow = {
   must_change_password: number
 }
 
+// Prüft das Passwort des eingeloggten Benutzers (für sensible Aktionen).
+async function checkPassword(db: D1Database, userId: number, password: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT password_hash FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ password_hash: string }>()
+  return !!row && (await verifyPassword(password, row.password_hash))
+}
+
 export const authRoutes = new Hono<AppEnv>()
 
 authRoutes.post('/login', async (c) => {
@@ -38,7 +48,7 @@ authRoutes.post('/login', async (c) => {
 
   const body = await readJson<{ username: unknown; password: unknown }>(c)
   const username = normalizeUsername(body.username)
-  const password = typeof body.password === 'string' ? body.password : ''
+  const password = asText(body.password)
 
   const row = username
     ? await c.env.DB.prepare(
@@ -53,14 +63,7 @@ authRoutes.post('/login', async (c) => {
 
   const { token } = await createSession(c.env.DB, row.id)
   setCookie(c, SESSION_COOKIE, token, { ...COOKIE_OPTIONS, maxAge: SESSION_TTL_SECONDS })
-  return c.json({
-    user: {
-      id: row.id,
-      username: row.username,
-      isAdmin: row.is_admin === 1,
-      mustChangePassword: row.must_change_password === 1,
-    },
-  })
+  return c.json({ user: toUser(row) })
 })
 
 authRoutes.post('/logout', requireUser, async (c) => {
@@ -75,11 +78,8 @@ authRoutes.post('/password', requireUser, async (c) => {
   const user = c.var.user!
   const body = await readJson<{ currentPassword: unknown; newPassword: unknown }>(c)
 
-  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
-    .bind(user.id)
-    .first<{ password_hash: string }>()
-  const current = typeof body.currentPassword === 'string' ? body.currentPassword : ''
-  if (!row || !(await verifyPassword(current, row.password_hash))) {
+  const current = asText(body.currentPassword)
+  if (!(await checkPassword(c.env.DB, user.id, current))) {
     throw new HttpError(400, 'Aktuelles Passwort ist falsch')
   }
 
@@ -102,11 +102,7 @@ authRoutes.delete('/account', requireUser, async (c) => {
   const user = c.var.user!
   const body = await readJson<{ password: unknown }>(c)
 
-  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
-    .bind(user.id)
-    .first<{ password_hash: string }>()
-  const password = typeof body.password === 'string' ? body.password : ''
-  if (!row || !(await verifyPassword(password, row.password_hash))) {
+  if (!(await checkPassword(c.env.DB, user.id, asText(body.password)))) {
     throw new HttpError(400, 'Passwort ist falsch')
   }
 

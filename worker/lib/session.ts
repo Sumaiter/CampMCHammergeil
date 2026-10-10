@@ -34,13 +34,23 @@ export async function createSession(
   return { token, sessionId }
 }
 
-type SessionRow = {
-  session_id: string
-  expires_at: number
+type UserFields = {
   id: number
   username: string
   is_admin: number
   must_change_password: number
+}
+
+export const toUser = (row: UserFields): User => ({
+  id: row.id,
+  username: row.username,
+  isAdmin: row.is_admin === 1,
+  mustChangePassword: row.must_change_password === 1,
+})
+
+type SessionRow = UserFields & {
+  session_id: string
+  expires_at: number
 }
 
 export async function getSession(
@@ -64,15 +74,7 @@ export async function getSession(
     return null
   }
 
-  return {
-    sessionId: row.session_id,
-    user: {
-      id: row.id,
-      username: row.username,
-      isAdmin: row.is_admin === 1,
-      mustChangePassword: row.must_change_password === 1,
-    },
-  }
+  return { sessionId: row.session_id, user: toUser(row) }
 }
 
 export async function deleteSession(db: D1Database, sessionId: string): Promise<void> {
