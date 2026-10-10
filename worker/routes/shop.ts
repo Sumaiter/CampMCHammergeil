@@ -130,9 +130,12 @@ async function loadListDetail(db: D1Database, id: number) {
 
 export const shopRoutes = new Hono<AppEnv>()
 
+// Beliebteste Artikel zuerst (Summe aller je bestellten Mengen, auch gedruckte), dann nach Name.
 shopRoutes.get('/items', requireUser, async (c) => {
   const { results } = await c.env.DB.prepare(
-    'SELECT id, name, price_cents FROM shop_items ORDER BY name COLLATE NOCASE',
+    `SELECT i.id, i.name, i.price_cents FROM shop_items i
+     ORDER BY (SELECT COALESCE(SUM(o.quantity), 0) FROM shop_orders o WHERE o.item_id = i.id) DESC,
+              i.name COLLATE NOCASE`,
   ).all<ItemRow>()
   return c.json({ items: results.map(toItem) })
 })
@@ -179,7 +182,7 @@ shopRoutes.put('/items/:id', requireAdmin, async (c) => {
 
 shopRoutes.get('/users', requireUser, async (c) => {
   const { results } = await c.env.DB.prepare(
-    'SELECT id, username FROM users ORDER BY username COLLATE NOCASE',
+    'SELECT id, username FROM users WHERE deleted_at IS NULL ORDER BY username COLLATE NOCASE',
   ).all<{ id: number; username: string }>()
   return c.json({ users: results })
 })
@@ -194,7 +197,10 @@ shopRoutes.post('/orders', requireUser, async (c) => {
   if (body.forUserId !== undefined && body.forUserId !== null) {
     const exists =
       isPositiveInt(body.forUserId) &&
-      (await db.prepare('SELECT 1 FROM users WHERE id = ?').bind(body.forUserId).first())
+      (await db
+        .prepare('SELECT 1 FROM users WHERE id = ? AND deleted_at IS NULL')
+        .bind(body.forUserId)
+        .first())
     if (!exists) throw new HttpError(400, 'Unbekannter Benutzer')
     recipientId = body.forUserId as number
   }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, errorMessage } from '@/api/client'
 import type { ShopItem } from '@/api/types'
 import { RoutePath } from '@/router/routePath'
+import QuantityStepper from './QuantityStepper.vue'
 import { formatPrice } from './price'
 import { useShopUsers } from './useShopUsers'
 
@@ -16,8 +17,14 @@ const items = ref<ShopItem[]>([])
 const loading = ref(true)
 const loadError = ref('')
 
-// Eingaben pro Artikel-ID; leer = nicht bestellt
-const quantities = ref<Record<number, number | string | null>>({})
+// Eingaben pro Artikel-ID (unabhängig vom Suchfilter); fehlt/0 = nicht bestellt
+const quantities = ref<Record<number, number>>({})
+const search = ref('')
+// Reihenfolge vom Server (nach Beliebtheit) bleibt erhalten
+const visibleItems = computed(() => {
+  const term = search.value.trim().toLowerCase()
+  return term ? items.value.filter((item) => item.name.toLowerCase().includes(term)) : items.value
+})
 const submitting = ref(false)
 const submitError = ref('')
 const submitSuccess = ref(false)
@@ -37,8 +44,7 @@ async function loadItems() {
 }
 
 function quantityOf(id: number): number {
-  const value = Number(quantities.value[id])
-  return Number.isFinite(value) ? Math.floor(value) : 0
+  return quantities.value[id] ?? 0
 }
 
 async function submit() {
@@ -107,26 +113,34 @@ onMounted(() => {
         {{ usersError }} – du bestellst für dich selbst.
       </p>
 
-      <ul v-if="items.length > 0" class="shop-plain-list">
-        <li v-for="item in items" :key="item.id" class="item-row">
+      <label v-if="items.length > 0" class="form-field">
+        <span>Artikel suchen</span>
+        <input
+          v-model="search"
+          class="form-input"
+          type="search"
+          autocomplete="off"
+          placeholder="Name eingeben …"
+        />
+      </label>
+
+      <p v-if="items.length > 0 && visibleItems.length === 0" class="empty">
+        Kein Artikel gefunden.
+      </p>
+
+      <ul v-if="visibleItems.length > 0" class="shop-plain-list">
+        <li v-for="item in visibleItems" :key="item.id" class="item-row">
           <div class="shop-item-info">
             <strong class="item-name">{{ item.name }}</strong>
             <small>{{ formatPrice(item.priceCents) }}</small>
           </div>
 
-          <label class="quantity">
-            <span class="sr-only">Anzahl für {{ item.name }}</span>
-            <input
-              v-model="quantities[item.id]"
-              class="form-input"
-              type="number"
-              inputmode="numeric"
-              min="0"
-              max="999"
-              step="1"
-              placeholder="Anzahl"
-            />
-          </label>
+          <QuantityStepper
+            :model-value="quantityOf(item.id)"
+            :max="999"
+            :label="`Anzahl für ${item.name}`"
+            @update:model-value="quantities[item.id] = $event"
+          />
         </li>
       </ul>
 
@@ -157,7 +171,7 @@ onMounted(() => {
 
 .item-row {
   display: grid;
-  grid-template-columns: 1fr 7.5rem;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 0;
@@ -167,20 +181,10 @@ onMounted(() => {
   }
 }
 
-.quantity .form-input {
-  text-align: right;
-}
-
 .form-success a {
   color: inherit;
   font-weight: 700;
   text-decoration: underline;
 }
 
-/* 📱 MOBILE: schmaleres Mengenfeld */
-@media (max-width: 600px) {
-  .item-row {
-    grid-template-columns: 1fr 6rem;
-  }
-}
 </style>

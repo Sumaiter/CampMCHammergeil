@@ -33,7 +33,7 @@ type UserRow = {
 // Prüft das Passwort des eingeloggten Benutzers (für sensible Aktionen).
 async function checkPassword(db: D1Database, userId: number, password: string): Promise<boolean> {
   const row = await db
-    .prepare('SELECT password_hash FROM users WHERE id = ?')
+    .prepare('SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL')
     .bind(userId)
     .first<{ password_hash: string }>()
   return !!row && (await verifyPassword(password, row.password_hash))
@@ -52,7 +52,7 @@ authRoutes.post('/login', async (c) => {
 
   const row = username
     ? await c.env.DB.prepare(
-        'SELECT id, username, password_hash, is_admin, must_change_password FROM users WHERE username = ?',
+        'SELECT id, username, password_hash, is_admin, must_change_password FROM users WHERE username = ? AND deleted_at IS NULL',
       )
         .bind(username)
         .first<UserRow>()
@@ -78,13 +78,17 @@ authRoutes.post('/password', requireUser, async (c) => {
   const user = c.var.user!
   const body = await readJson<{ currentPassword: unknown; newPassword: unknown }>(c)
 
+  // Wer das vorläufige Passwort gerade erst zum Login benutzt hat, muss es nicht erneut eingeben.
   const current = asText(body.currentPassword)
-  if (!(await checkPassword(c.env.DB, user.id, current))) {
+  if (!user.mustChangePassword && !(await checkPassword(c.env.DB, user.id, current))) {
     throw new HttpError(400, 'Aktuelles Passwort ist falsch')
   }
 
   const newPassword = validatePassword(body.newPassword)
-  if (newPassword === current) {
+  const sameAsCurrent = user.mustChangePassword
+    ? await checkPassword(c.env.DB, user.id, newPassword)
+    : newPassword === current
+  if (sameAsCurrent) {
     throw new HttpError(400, 'Das neue Passwort muss sich vom aktuellen unterscheiden')
   }
   await c.env.DB.prepare(
@@ -96,7 +100,7 @@ authRoutes.post('/password', requireUser, async (c) => {
   return c.json({ ok: true })
 })
 
-// Löscht das eigene Konto (Sessions verschwinden per ON DELETE CASCADE). Zur Bestätigung ist das
+// Löscht das eigene Konto (Soft Delete, Bestellungen bleiben erhalten). Zur Bestätigung ist das
 // aktuelle Passwort nötig. Der letzte Admin bleibt erhalten, sonst könnte niemand mehr verwalten.
 authRoutes.delete('/account', requireUser, async (c) => {
   const user = c.var.user!

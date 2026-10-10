@@ -7,6 +7,7 @@ import { RoutePath } from '@/router/routePath'
 import { formatDateTime } from './date'
 import { formatLineTotal, orderHint, ownTotal } from './orders'
 import { formatPrice } from './price'
+import QuantityStepper from './QuantityStepper.vue'
 import { useOrderEdit } from './useOrderEdit'
 
 const { user } = useAuth()
@@ -20,7 +21,7 @@ const own = computed(() => ownTotal(orders.value, meId.value))
 const hasOthers = computed(() => orders.value.some((order) => order.userId !== meId.value))
 
 // Bei 404/409 ist die Position nicht mehr offen (gedruckt oder gelöscht) -> Liste neu laden
-const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = useOrderEdit({
+const { actionError, busyId, saving, drafts, syncDrafts, isChanged, saveChanged, remove } = useOrderEdit({
   basePath: '/api/shop/orders',
   onSaved: (order) => {
     const index = orders.value.findIndex((entry) => entry.id === order.id)
@@ -31,6 +32,18 @@ const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = use
   },
   onStale: () => loadOrders(),
 })
+
+const hasChanges = computed(() => orders.value.some(isChanged))
+const saveSuccess = ref(false)
+
+async function saveAll() {
+  saveSuccess.value = false
+  saveSuccess.value = await saveChanged(orders.value)
+}
+
+function draftOf(order: ShopOrder): number {
+  return Number(drafts.value[order.id] ?? order.quantity)
+}
 
 async function loadOrders() {
   try {
@@ -89,16 +102,12 @@ onMounted(loadOrders)
                   </span>
                 </td>
                 <td data-label="Anzahl" class="num">
-                  <input
-                    v-model="drafts[order.id]"
-                    class="form-input shop-qty-input"
-                    type="number"
-                    inputmode="numeric"
-                    min="1"
-                    max="999"
-                    step="1"
-                    :aria-label="`Anzahl für ${order.itemName}`"
-                    :disabled="busyId === order.id"
+                  <QuantityStepper
+                    :model-value="draftOf(order)"
+                    :min="1"
+                    :max="999"
+                    :label="`Anzahl für ${order.itemName}`"
+                    @update:model-value="drafts[order.id] = $event"
                   />
                 </td>
                 <td data-label="Einzelpreis" class="num">{{ formatPrice(order.priceCents) }}</td>
@@ -106,18 +115,9 @@ onMounted(loadOrders)
                 <td data-label="Zeitpunkt" class="date">{{ formatDateTime(order.createdAt) }}</td>
                 <td class="actions">
                   <button
-                    v-if="isChanged(order)"
-                    type="button"
-                    class="btn btn-small"
-                    :disabled="busyId === order.id"
-                    @click="save(order)"
-                  >
-                    Speichern
-                  </button>
-                  <button
                     type="button"
                     class="btn btn-secondary btn-small btn-danger"
-                    :disabled="busyId === order.id"
+                    :disabled="busyId === order.id || saving"
                     @click="remove(order)"
                   >
                     Löschen
@@ -129,6 +129,15 @@ onMounted(loadOrders)
         </div>
 
         <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
+        <p v-if="saveSuccess && !hasChanges" class="form-success" role="status">
+          Änderungen gespeichert.
+        </p>
+
+        <div>
+          <button type="button" class="btn" :disabled="!hasChanges || saving" @click="saveAll">
+            Speichern
+          </button>
+        </div>
 
         <p class="shop-total">
           <span>Deine Summe</span>

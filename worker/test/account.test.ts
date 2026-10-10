@@ -32,7 +32,7 @@ describe('DELETE /api/auth/account', () => {
     },
   )
 
-  it('löscht Benutzer samt allen Sessions und das Cookie', async () => {
+  it('sperrt Benutzer samt allen Sessions und das Cookie, behält aber die Zeile', async () => {
     const cookie = await login('josh', 'geheim123')
     await login('josh', 'geheim123')
     const res = await deleteAccount(cookie, 'geheim123')
@@ -44,15 +44,43 @@ describe('DELETE /api/auth/account', () => {
       .bind(joshId)
       .first<{ n: number }>()
     expect(left?.n).toBe(0)
-    expect(await userCount()).toBe(1)
+    expect(await userCount()).toBe(2)
     await expect(login('josh', 'geheim123')).rejects.toThrow()
+    const row = await env.DB.prepare('SELECT deleted_at, is_admin FROM users WHERE id = ?')
+      .bind(joshId)
+      .first<{ deleted_at: string | null; is_admin: number }>()
+    expect(row?.deleted_at).toBeTruthy()
+    expect(row?.is_admin).toBe(0)
+  })
+
+  it('behält die Bestellungen des gelöschten Benutzers', async () => {
+    const item = await env.DB.prepare(
+      "INSERT INTO shop_items (name) VALUES ('Cola') RETURNING id",
+    ).first<{ id: number }>()
+    await env.DB.prepare('INSERT INTO shop_orders (user_id, item_id, quantity) VALUES (?, ?, 2)')
+      .bind(joshId, item!.id)
+      .run()
+    const cookie = await login('josh', 'geheim123')
+    expect((await deleteAccount(cookie, 'geheim123')).status).toBe(200)
+    const orders = await env.DB.prepare('SELECT quantity FROM shop_orders WHERE user_id = ?')
+      .bind(joshId)
+      .all<{ quantity: number }>()
+    expect(orders.results).toEqual([{ quantity: 2 }])
   })
 
   it('erlaubt einem Admin das Löschen, solange ein weiterer Admin bleibt', async () => {
     await createUser('boss2', 'geheim123', true)
     const cookie = await login('boss2', 'geheim123')
     expect((await deleteAccount(cookie, 'geheim123')).status).toBe(200)
-    expect(await userCount()).toBe(2)
+    expect(await userCount()).toBe(3)
+  })
+
+  it('zählt gelöschte Admins beim Schutz des letzten Admins nicht mit', async () => {
+    await createUser('boss2', 'geheim123', true)
+    const cookie2 = await login('boss2', 'geheim123')
+    expect((await deleteAccount(cookie2, 'geheim123')).status).toBe(200)
+    const cookie = await login('boss', 'geheim123')
+    expect((await deleteAccount(cookie, 'geheim123')).status).toBe(409)
   })
 
   it('schützt den letzten Admin mit 409', async () => {

@@ -17,22 +17,27 @@ type UserRow = { id: number; username: string; is_admin: number; created_at: str
 
 const NOT_FOUND = 'Benutzer nicht gefunden'
 
-// Prüfung und Löschen in einem Statement, damit zwei Admins, die sich gleichzeitig gegenseitig
-// löschen, nicht beide durchkommen. Sessions verschwinden per ON DELETE CASCADE.
+// Soft Delete: Die Zeile bleibt, damit Bestellungen und Listen den Namen weiter anzeigen können.
+// Prüfung und Update in einem Statement, damit zwei Admins, die sich gleichzeitig gegenseitig
+// löschen, nicht beide durchkommen. Das Passwort wird unbrauchbar (kein gültiges Hash-Format).
 export async function deleteUserUnlessLastAdmin(db: D1Database, id: number): Promise<boolean> {
   const { meta } = await db
     .prepare(
-      `DELETE FROM users WHERE id = ?
-         AND (is_admin = 0 OR (SELECT COUNT(*) FROM users WHERE is_admin = 1) > 1)`,
+      `UPDATE users SET deleted_at = datetime('now'), is_admin = 0, password_hash = '!deleted'
+       WHERE id = ? AND deleted_at IS NULL
+         AND (is_admin = 0
+              OR (SELECT COUNT(*) FROM users WHERE is_admin = 1 AND deleted_at IS NULL) > 1)`,
     )
     .bind(id)
     .run()
-  return meta.changes > 0
+  if (meta.changes === 0) return false
+  await deleteUserSessions(db, id)
+  return true
 }
 
 async function findUser(db: D1Database, rawId: string): Promise<{ id: number }> {
   const row = await db
-    .prepare('SELECT id FROM users WHERE id = ?')
+    .prepare('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL')
     .bind(parseId(rawId, NOT_FOUND))
     .first<{ id: number }>()
   if (!row) throw new HttpError(404, NOT_FOUND)
@@ -45,7 +50,7 @@ adminRoutes.use('*', requireAdmin)
 
 adminRoutes.get('/users', async (c) => {
   const { results } = await c.env.DB.prepare(
-    'SELECT id, username, is_admin, created_at FROM users ORDER BY username COLLATE NOCASE',
+    'SELECT id, username, is_admin, created_at FROM users WHERE deleted_at IS NULL ORDER BY username COLLATE NOCASE',
   ).all<UserRow>()
   return c.json({
     users: results.map((row) => ({
@@ -90,6 +95,19 @@ adminRoutes.delete('/users/:id', async (c) => {
     throw new HttpError(403, 'Der letzte Admin kann nicht gelöscht werden')
   }
   return c.json({ ok: true })
+})
+
+// Setzt die Testdaten zurück: alle Bestellungen und Listen, nie Benutzer oder Artikel.
+adminRoutes.delete('/shop-data', async (c) => {
+  const [orders, lists] = await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM shop_orders'),
+    c.env.DB.prepare('DELETE FROM shop_lists'),
+  ])
+  return c.json({
+    ok: true,
+    deletedOrders: orders!.meta.changes,
+    deletedLists: lists!.meta.changes,
+  })
 })
 
 adminRoutes.post('/users/:id/password', async (c) => {

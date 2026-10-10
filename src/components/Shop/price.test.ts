@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centsToInput, formatPrice, formatPriceOrDash, parsePrice } from './price'
+import { centsToInput, formatPrice, formatPriceOrDash, parsePrice, paypalPayUrl } from './price'
 
 // Intl nutzt ein geschütztes Leerzeichen vor dem Euro-Zeichen.
 const normalize = (value: string) => value.replace(/ /g, ' ')
@@ -61,5 +61,15 @@ describe('parsePrice', () => {
     expect(parsePrice('1,234')).toEqual({ ok: false })
     expect(parsePrice('1,2,3')).toEqual({ ok: false })
     expect(parsePrice('1e3')).toEqual({ ok: false })
+  })
+})
+
+describe('paypalPayUrl', () => {
+  it('baut den Link mit Punkt-Betrag und kodiertem Verwendungszweck', () => {
+    expect(paypalPayUrl(1250)).toBe(
+      'https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=joshua.nierentz%40gmail.com&currency_code=EUR&amount=12.50&item_name=Camp%20MC%20Hammergeil%20Einkauf',
+    )
+    expect(paypalPayUrl(5)).toContain('amount=0.05')
+    expect(paypalPayUrl(123456)).toContain('amount=1234.56')
   })
 })

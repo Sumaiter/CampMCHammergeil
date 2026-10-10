@@ -6,7 +6,7 @@ import { useAuth } from '@/auth/useAuth'
 import { RoutePath } from '@/router/routePath'
 import { formatDateTime, formatListTitle } from './date'
 import { formatLineTotal, groupByList, orderHint, ownTotal } from './orders'
-import { formatPrice } from './price'
+import { formatPrice, paypalPayUrl } from './price'
 import { useOrderEdit } from './useOrderEdit'
 import { useShopUsers } from './useShopUsers'
 
@@ -179,6 +179,15 @@ onMounted(() => {
           <span>{{ viewingOther ? `Gesamtsumme für ${viewedName}` : 'Deine Gesamtsumme' }}</span>
           <strong>{{ formatPrice(grand.totalCents) }}</strong>
         </p>
+        <a
+          v-if="!viewingOther && grand.totalCents > 0"
+          class="btn paypal-link"
+          :href="paypalPayUrl(grand.totalCents)"
+          target="_blank"
+          rel="noopener"
+        >
+          Mit PayPal bezahlen
+        </a>
         <p class="hint">
           Bestellungen für andere sind in der Summe nicht enthalten, ebenso Artikel ohne Preis{{
             unpricedText
@@ -294,5 +303,10 @@ onMounted(() => {
 
 .btn-small {
   align-self: flex-start;
+}
+
+.paypal-link {
+  align-self: flex-start;
+  text-decoration: none;
 }
 </style>

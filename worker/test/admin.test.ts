@@ -93,6 +93,22 @@ describe('/api/admin', () => {
   })
 
   describe('löschen', () => {
+    it('sperrt Benutzer, behält aber Bestellungen', async () => {
+      const item = await env.DB.prepare(
+        "INSERT INTO shop_items (name) VALUES ('Cola') RETURNING id",
+      ).first<{ id: number }>()
+      await env.DB.prepare('INSERT INTO shop_orders (user_id, item_id, quantity) VALUES (?, ?, 1)')
+        .bind(joshId, item!.id)
+        .run()
+      expect((await deleteViaApi(joshId)).status).toBe(200)
+      const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM shop_orders WHERE user_id = ?')
+        .bind(joshId)
+        .first<{ n: number }>()
+      expect(left?.n).toBe(1)
+      await expect(login('josh', 'geheim123')).rejects.toThrow()
+      expect((await deleteViaApi(joshId)).status).toBe(404)
+    })
+
     it('löscht Benutzer samt Sessions', async () => {
       const res = await deleteViaApi(joshId)
       expect(res.status).toBe(200)
@@ -155,28 +171,30 @@ describe('/api/admin', () => {
 })
 
 describe('deleteUserUnlessLastAdmin', () => {
-  const userCount = async () =>
-    (await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>())!.n
+  const activeCount = async () =>
+    (await env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE deleted_at IS NULL').first<{
+      n: number
+    }>())!.n
 
   beforeEach(resetDb)
 
   it('löscht den letzten Admin nicht', async () => {
     const id = await createUser('boss', 'geheim123', true)
     expect(await deleteUserUnlessLastAdmin(env.DB, id)).toBe(false)
-    expect(await userCount()).toBe(1)
+    expect(await activeCount()).toBe(1)
   })
 
   it('löscht einen Admin, wenn ein weiterer übrig bleibt', async () => {
     await createUser('boss', 'geheim123', true)
     const id = await createUser('boss2', 'geheim123', true)
     expect(await deleteUserUnlessLastAdmin(env.DB, id)).toBe(true)
-    expect(await userCount()).toBe(1)
+    expect(await activeCount()).toBe(1)
   })
 
   it('löscht normale Benutzer', async () => {
     await createUser('boss', 'geheim123', true)
     const id = await createUser('josh', 'geheim123')
     expect(await deleteUserUnlessLastAdmin(env.DB, id)).toBe(true)
-    expect(await userCount()).toBe(1)
+    expect(await activeCount()).toBe(1)
   })
 })

@@ -206,6 +206,32 @@ describe('/api/shop', () => {
         'Zelt',
       ])
     })
+
+    it('sortiert nach insgesamt bestellter Menge (auch gedruckt, alle Benutzer), dann nach Name', async () => {
+      const apfel = await addItem('Apfelschorle')
+      const bier = await addItem('Bier')
+      const cola = await addItem('Cola')
+      await addItem('Dose')
+      expect((await order([{ itemId: bier.id, quantity: 2 }])).status).toBe(201)
+      expect((await print()).status).toBe(201)
+      expect((await order([{ itemId: cola.id, quantity: 1 }], otherCookie)).status).toBe(201)
+      expect((await order([{ itemId: cola.id, quantity: 1 }])).status).toBe(201)
+      expect((await order([{ itemId: apfel.id, quantity: 2 }], otherCookie)).status).toBe(201)
+      // Alle drei haben Menge 2 (Gleichstand nach Name); Dose ohne Bestellung kommt zuletzt
+      expect((await listItems()).map((i) => i.name)).toEqual([
+        'Apfelschorle',
+        'Bier',
+        'Cola',
+        'Dose',
+      ])
+      expect((await order([{ itemId: cola.id, quantity: 1 }])).status).toBe(201)
+      expect((await listItems()).map((i) => i.name)).toEqual([
+        'Cola',
+        'Apfelschorle',
+        'Bier',
+        'Dose',
+      ])
+    })
   })
 
   describe('Artikel ändern', () => {
@@ -364,7 +390,7 @@ describe('/api/shop', () => {
       expect(await listOrders()).toEqual([])
     })
 
-    it('verschwindet mit dem Benutzer, ohne das Löschen zu blockieren', async () => {
+    it('bleibt erhalten, wenn der Benutzer sein Konto löscht', async () => {
       await order([{ itemId: cola.id, quantity: 1 }])
       const res = await api('/api/auth/account', {
         method: 'DELETE',
@@ -375,7 +401,7 @@ describe('/api/shop', () => {
       const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM shop_orders').first<{
         n: number
       }>()
-      expect(left?.n).toBe(0)
+      expect(left?.n).toBe(1)
     })
   })
 
@@ -411,6 +437,35 @@ describe('/api/shop', () => {
             { id: userId, username: 'josh' },
           ],
         })
+      })
+    })
+
+    describe('Gelöschte Benutzer', () => {
+      const deleteAccount = (cookie: string) =>
+        api('/api/auth/account', { method: 'DELETE', cookie, body: { password: 'geheim123' } })
+
+      it('bleiben in Übersicht, Listen und Salden sichtbar, aber nicht in der Benutzerliste', async () => {
+        await orderOne(cola, 2, otherCookie)
+        await orderOne(cola, 1, userCookie, otherId)
+        const printed = await printList()
+        await orderOne(spende, 1, otherCookie)
+        expect((await deleteAccount(otherCookie)).status).toBe(200)
+
+        const users = (await getJson<{ users: { id: number }[] }>('/api/shop/users')).users
+        expect(users.map((u) => u.id)).not.toContain(otherId)
+        expect((await overview()).map((o) => o.username)).toContain('anna')
+        expect((await getList(printed.id)).orders.map((o) => o.username)).toContain('anna')
+        expect((await openOrders()).map((o) => o.username)).toEqual(['anna'])
+        expect(await balances()).toEqual([
+          { userId: otherId, username: 'anna', totalCents: 450, unpricedCount: 0 },
+        ])
+      })
+
+      it('können nicht mehr als Empfänger gewählt werden', async () => {
+        await deleteAccount(otherCookie)
+        const res = await order([{ itemId: cola.id, quantity: 1 }], userCookie, otherId)
+        expect(res.status).toBe(400)
+        expect(await res.json()).toEqual({ error: 'Unbekannter Benutzer' })
       })
     })
 
@@ -466,7 +521,7 @@ describe('/api/shop', () => {
         })
         expect(res.status).toBe(200)
         expect(await listOrders(otherCookie)).toEqual([
-          expect.objectContaining({ userId: otherId, orderedById: null, orderedByName: null }),
+          expect.objectContaining({ userId: otherId, orderedById: userId, orderedByName: 'josh' }),
         ])
       })
     })
@@ -858,6 +913,38 @@ describe('/api/shop', () => {
       it('liefert ohne gedruckte Positionen eine leere Liste', async () => {
         await orderOne(cola)
         expect(await balances()).toEqual([])
+      })
+    })
+
+    describe('Testdaten zurücksetzen (Admin)', () => {
+      const reset = (cookie?: string) => api('/api/admin/shop-data', { method: 'DELETE', cookie })
+
+      const count = async (table: string) =>
+        (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())!.n
+
+      it('verlangt Login und Adminrechte', async () => {
+        expect((await reset()).status).toBe(401)
+        expect((await reset(userCookie)).status).toBe(403)
+      })
+
+      it('löscht Bestellungen und Listen, aber nie Benutzer oder Artikel', async () => {
+        await orderOne(cola, 2)
+        await printList()
+        await orderOne(spende, 1, otherCookie)
+        await orderOne(cola, 1, otherCookie)
+
+        const res = await reset(adminCookie)
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true, deletedOrders: 3, deletedLists: 1 })
+        expect(await count('shop_orders')).toBe(0)
+        expect(await count('shop_lists')).toBe(0)
+        expect(await count('shop_items')).toBe(2)
+        expect(await count('users')).toBe(3)
+      })
+
+      it('funktioniert auch ohne Daten', async () => {
+        const res = await reset(adminCookie)
+        expect(await res.json()).toEqual({ ok: true, deletedOrders: 0, deletedLists: 0 })
       })
     })
   })

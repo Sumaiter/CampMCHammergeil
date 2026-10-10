@@ -63,7 +63,7 @@ export async function getSession(
     .prepare(
       `SELECT s.id AS session_id, s.expires_at, u.id, u.username, u.is_admin, u.must_change_password
        FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.id = ?`,
+       WHERE s.id = ? AND u.deleted_at IS NULL`,
     )
     .bind(sessionId)
     .first<SessionRow>()

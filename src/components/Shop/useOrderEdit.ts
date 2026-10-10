@@ -20,6 +20,8 @@ export function useOrderEdit(options: Options) {
   // Zeile, die gerade gespeichert oder gelöscht wird
   const busyId = ref<number | null>(null)
   // Eingaben im Mengenfeld pro Bestell-ID (vorbelegt mit der gespeicherten Menge)
+  // Sammel-Speichern läuft
+  const saving = ref(false)
   const drafts = ref<Record<number, number | string | null>>({})
 
   function syncDrafts(orders: ShopOrder[]) {
@@ -66,6 +68,40 @@ export function useOrderEdit(options: Options) {
     }
   }
 
+  // Alle geänderten Positionen speichern; true, wenn alle erfolgreich waren
+  async function saveChanged(orders: ShopOrder[]): Promise<boolean> {
+    actionError.value = ''
+    const changed = orders.filter(isChanged)
+    if (changed.some((order) => draftQuantity(order) === null)) {
+      actionError.value = 'Die Anzahl muss zwischen 1 und 999 liegen.'
+      return false
+    }
+
+    saving.value = true
+    try {
+      const results = await Promise.allSettled(
+        changed.map((order) =>
+          api.put<{ order: ShopOrder }>(`${options.basePath}/${order.id}`, {
+            quantity: draftQuantity(order),
+          }),
+        ),
+      )
+      let failure: unknown
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          drafts.value[result.value.order.id] = result.value.order.quantity
+          await options.onSaved(result.value.order)
+        } else {
+          failure ??= result.reason
+        }
+      }
+      if (failure !== undefined) await handleError(failure, 'Anzahl konnte nicht gespeichert werden')
+      return failure === undefined
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function remove(order: ShopOrder) {
     if (!confirm(`„${order.itemName}“ wirklich von der Liste löschen?`)) return
     actionError.value = ''
@@ -82,5 +118,5 @@ export function useOrderEdit(options: Options) {
     }
   }
 
-  return { actionError, busyId, drafts, syncDrafts, draftQuantity, isChanged, save, remove }
+  return { actionError, busyId, saving, drafts, syncDrafts, draftQuantity, isChanged, save, saveChanged, remove }
 }

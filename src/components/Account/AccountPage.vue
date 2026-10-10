@@ -19,6 +19,24 @@ const deletePassword = ref('')
 const deleteError = ref('')
 const deleting = ref(false)
 
+// Testdaten zurücksetzen (nur Admin)
+const resetError = ref('')
+const resetResult = ref('')
+const resetting = ref(false)
+
+// Welcher Bereich gerade aufgeklappt ist (immer nur einer)
+type Section = 'password' | 'delete' | 'reset'
+const openSection = ref<Section | null>(null)
+
+function toggle(section: Section) {
+  openSection.value = openSection.value === section ? null : section
+  error.value = ''
+  success.value = ''
+  deleteError.value = ''
+  resetError.value = ''
+  resetResult.value = ''
+}
+
 async function changePassword() {
   error.value = ''
   success.value = ''
@@ -29,11 +47,11 @@ async function changePassword() {
 
   pending.value = true
   try {
+    const wasForced = user.value?.mustChangePassword === true
     await api.post('/api/auth/password', {
-      currentPassword: currentPassword.value,
+      ...(wasForced ? {} : { currentPassword: currentPassword.value }),
       newPassword: newPassword.value,
     })
-    const wasForced = user.value?.mustChangePassword === true
     passwordChanged()
     currentPassword.value = ''
     newPassword.value = ''
@@ -43,6 +61,7 @@ async function changePassword() {
       await routerHelper.replace(RoutePath.Home)
       return
     }
+    openSection.value = null
     success.value = 'Passwort geändert.'
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : 'Passwort konnte nicht geändert werden'
@@ -70,6 +89,31 @@ async function onDeleteAccount() {
   }
 }
 
+async function onResetShopData() {
+  resetError.value = ''
+  resetResult.value = ''
+  if (
+    !window.confirm(
+      'Wirklich ALLE Bestellungen und gedruckten Listen löschen? Das kann nicht rückgängig gemacht werden.',
+    )
+  ) {
+    return
+  }
+
+  resetting.value = true
+  try {
+    const res = await api.delete<{ ok: boolean; deletedOrders: number; deletedLists: number }>(
+      '/api/admin/shop-data',
+    )
+    resetResult.value = `${res.deletedOrders} Bestellungen und ${res.deletedLists} Listen gelöscht`
+  } catch (err) {
+    resetError.value =
+      err instanceof ApiError ? err.message : 'Testdaten konnten nicht zurückgesetzt werden'
+  } finally {
+    resetting.value = false
+  }
+}
+
 async function onLogout() {
   await logout()
   await routerHelper.replace(RoutePath.Home)
@@ -80,90 +124,197 @@ async function onLogout() {
   <div class="page-section account">
     <h1 class="page-title">Hallo, {{ user?.username }}</h1>
 
-    <p v-if="user?.mustChangePassword" class="notice" role="alert">
-      Du musst dein Passwort ändern, bevor du fortfahren kannst. Wähle ein neues Passwort, das nur
-      du kennst.
-    </p>
-
-    <form class="card glass-card" @submit.prevent="changePassword">
-      <h2>Passwort ändern</h2>
-
-      <label class="form-field">
-        <span>{{ user?.mustChangePassword ? 'Vorläufiges Passwort' : 'Aktuelles Passwort' }}</span>
-        <input
-          v-model="currentPassword"
-          class="form-input"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-      </label>
-
-      <label class="form-field">
-        <span>Neues Passwort</span>
-        <input
-          v-model="newPassword"
-          class="form-input"
-          type="password"
-          autocomplete="new-password"
-          minlength="8"
-          maxlength="128"
-          required
-        />
-      </label>
-
-      <label class="form-field">
-        <span>Neues Passwort wiederholen</span>
-        <input
-          v-model="repeatPassword"
-          class="form-input"
-          type="password"
-          autocomplete="new-password"
-          required
-        />
-      </label>
-
-      <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-      <p v-if="success" class="form-success" role="status">{{ success }}</p>
-
-      <button type="submit" class="btn" :disabled="pending">Passwort speichern</button>
-    </form>
-
-    <div class="actions">
-      <router-link
-        v-if="isAdmin && !user?.mustChangePassword"
-        :to="RoutePath.Admin"
-        class="btn admin-link"
-      >
-        Benutzerverwaltung
-      </router-link>
-      <button type="button" class="btn btn-secondary" @click="onLogout">Logout</button>
-    </div>
-
-    <form class="card glass-card danger-zone" @submit.prevent="onDeleteAccount">
-      <h2>Konto löschen</h2>
-      <p class="hint">
-        Dein Konto und alle zugehörigen Daten werden endgültig gelöscht. Zur Bestätigung brauchst du
-        dein aktuelles Passwort.
+    <!-- Erster Login: nur Passwortänderung, ohne aktuelles Passwort -->
+    <template v-if="user?.mustChangePassword">
+      <p class="notice" role="alert">
+        Du musst dein Passwort ändern, bevor du fortfahren kannst. Wähle ein neues Passwort, das
+        nur du kennst.
       </p>
 
-      <label class="form-field">
-        <span>Passwort</span>
-        <input
-          v-model="deletePassword"
-          class="form-input"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-      </label>
+      <form class="card glass-card" @submit.prevent="changePassword">
+        <h2>Neues Passwort festlegen</h2>
 
-      <p v-if="deleteError" class="form-error" role="alert">{{ deleteError }}</p>
+        <label class="form-field">
+          <span>Neues Passwort</span>
+          <input
+            v-model="newPassword"
+            class="form-input"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            maxlength="128"
+            required
+          />
+        </label>
 
-      <button type="submit" class="btn btn-secondary btn-danger" :disabled="deleting">
-        {{ deleting ? 'Löschen…' : 'Konto löschen' }}
+        <label class="form-field">
+          <span>Neues Passwort wiederholen</span>
+          <input
+            v-model="repeatPassword"
+            class="form-input"
+            type="password"
+            autocomplete="new-password"
+            required
+          />
+        </label>
+
+        <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+
+        <button type="submit" class="btn" :disabled="pending">Passwort speichern</button>
+      </form>
+    </template>
+
+    <div v-else class="sections">
+      <button type="button" class="btn btn-secondary" @click="onLogout">Logout</button>
+
+      <router-link v-if="isAdmin" :to="RoutePath.Admin" class="btn admin-link">
+        Benutzerverwaltung
+      </router-link>
+
+      <p v-if="success" class="form-success" role="status">{{ success }}</p>
+
+      <!-- Passwort ändern -->
+      <button
+        type="button"
+        class="btn btn-secondary"
+        :aria-expanded="openSection === 'password'"
+        aria-controls="section-password"
+        @click="toggle('password')"
+      >
+        Passwort ändern
       </button>
-    </form>
+      <form
+        v-if="openSection === 'password'"
+        id="section-password"
+        class="card glass-card"
+        @submit.prevent="changePassword"
+      >
+        <label class="form-field">
+          <span>Aktuelles Passwort</span>
+          <input
+            v-model="currentPassword"
+            class="form-input"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+
+        <label class="form-field">
+          <span>Neues Passwort</span>
+          <input
+            v-model="newPassword"
+            class="form-input"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            maxlength="128"
+            required
+          />
+        </label>
+
+        <label class="form-field">
+          <span>Neues Passwort wiederholen</span>
+          <input
+            v-model="repeatPassword"
+            class="form-input"
+            type="password"
+            autocomplete="new-password"
+            required
+          />
+        </label>
+
+        <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+
+        <div class="form-actions">
+          <button type="submit" class="btn" :disabled="pending">Passwort speichern</button>
+          <button type="button" class="btn btn-secondary" @click="toggle('password')">
+            Abbrechen
+          </button>
+        </div>
+      </form>
+
+      <!-- Konto löschen -->
+      <button
+        type="button"
+        class="btn btn-secondary btn-danger"
+        :aria-expanded="openSection === 'delete'"
+        aria-controls="section-delete"
+        @click="toggle('delete')"
+      >
+        Konto löschen
+      </button>
+      <form
+        v-if="openSection === 'delete'"
+        id="section-delete"
+        class="card glass-card danger-zone"
+        @submit.prevent="onDeleteAccount"
+      >
+        <p class="hint">
+          Dein Konto und dein Login werden gelöscht. Bereits aufgegebene Bestellungen und Einkäufe
+          bleiben mit deinem Namen gespeichert, damit offene Zahlungen abgerechnet werden können.
+          Zur Bestätigung brauchst du dein aktuelles Passwort.
+        </p>
+
+        <label class="form-field">
+          <span>Passwort</span>
+          <input
+            v-model="deletePassword"
+            class="form-input"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+
+        <p v-if="deleteError" class="form-error" role="alert">{{ deleteError }}</p>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-secondary btn-danger" :disabled="deleting">
+            {{ deleting ? 'Löschen…' : 'Konto endgültig löschen' }}
+          </button>
+          <button type="button" class="btn btn-secondary" @click="toggle('delete')">
+            Abbrechen
+          </button>
+        </div>
+      </form>
+
+      <!-- Testdaten zurücksetzen (nur Admin) -->
+      <template v-if="isAdmin">
+        <button
+          type="button"
+          class="btn btn-secondary btn-danger"
+          :aria-expanded="openSection === 'reset'"
+          aria-controls="section-reset"
+          @click="toggle('reset')"
+        >
+          Testdaten zurücksetzen
+        </button>
+        <div v-if="openSection === 'reset'" id="section-reset" class="card glass-card danger-zone">
+          <p class="hint">
+            Löscht alle Bestellungen und gedruckten Listen. Benutzer und Artikelliste bleiben
+            erhalten. Das kann nicht rückgängig gemacht werden.
+          </p>
+
+          <p v-if="resetError" class="form-error" role="alert">{{ resetError }}</p>
+          <p v-if="resetResult" class="form-success" role="status">{{ resetResult }}</p>
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn btn-secondary btn-danger"
+              :disabled="resetting"
+              @click="onResetShopData"
+            >
+              {{ resetting ? 'Löschen…' : 'Alle Bestellungen und Listen löschen' }}
+            </button>
+            <button type="button" class="btn btn-secondary" @click="toggle('reset')">
+              Schließen
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -192,13 +343,14 @@ async function onLogout() {
   color: var(--c-accent);
 }
 
-.danger-zone {
-  margin-top: 1.25rem;
-  border-color: rgba(255, 138, 138, 0.35);
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
 
-  h2 {
-    color: #ff8a8a;
-  }
+.danger-zone {
+  border-color: rgba(255, 138, 138, 0.35);
 
   .hint {
     font-size: 0.9rem;
@@ -206,14 +358,13 @@ async function onLogout() {
   }
 }
 
-.actions {
+.form-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-top: 1.25rem;
 
   .btn {
-    flex: 1 1 180px;
+    flex: 1 1 140px;
   }
 }
 

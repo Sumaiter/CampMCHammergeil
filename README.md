@@ -43,7 +43,14 @@ auf alles außer `GET /api/auth/me`, `POST /api/auth/login|logout|password` und
 `DELETE /api/auth/account` mit `403` und `{ "code": "password_change_required" }`. Der per Skript
 angelegte erste Admin wählt sein Passwort selbst und ist davon nicht betroffen. Benutzer können ihr
 Konto selbst löschen (`DELETE /api/auth/account` mit `{ "password": … }`); der letzte Admin ist
-davon ausgenommen (`409`).
+davon ausgenommen (`409`). Das Löschen ist ein Soft Delete (`users.deleted_at`): Der Benutzer kann sich
+nicht mehr anmelden und verschwindet aus Benutzerlisten, seine Bestellungen und Namen in Listen und
+Salden bleiben aber erhalten; der Benutzername bleibt reserviert.
+
+Testdaten zurücksetzen: `DELETE /api/admin/shop-data` (nur Admins) löscht alle Bestellungen und
+gedruckten Listen und antwortet mit `{ "ok": true, "deletedOrders": …, "deletedLists": … }`. Benutzer und
+Artikel bleiben bestehen. Dasselbe per Kommandozeile: `npm run reset-shop-data -- [--remote] [--yes]`
+(fragt zur Bestätigung nach „LÖSCHEN“, `--yes` überspringt die Abfrage).
 
 Alle Befehle:
 
@@ -53,6 +60,7 @@ npm test                               # Worker- und Frontend-Tests (Vitest)
 npm run db:migrate:local               # Migrationen auf die lokale D1 anwenden
 npm run create-admin -- <name>         # Admin in der lokalen D1 anlegen
 npm run create-admin -- <name> --remote  # Admin in der Produktions-D1 anlegen
+npm run reset-shop-data                # Bestellungen + Listen in der lokalen D1 löschen (--remote: Produktion)
 npm run db:migrate:remote              # Migrationen auf die Produktions-D1 anwenden
 npm run deploy                         # Build + wrangler deploy
 ```

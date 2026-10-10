@@ -59,13 +59,27 @@ describe('Passwortänderung erzwingen', () => {
       expect(await me(cookie)).toMatchObject({ mustChangePassword: false })
     })
 
-    it('bleibt bei falschem aktuellem Passwort gesetzt', async () => {
+    it('verlangt das aktuelle Passwort nicht', async () => {
       await createUser('josh', 'geheim123', false, true)
       const cookie = await login('josh', 'geheim123')
       const res = await api('/api/auth/password', {
         method: 'POST',
         cookie,
-        body: { currentPassword: 'falsch123', newPassword: 'neuespass1' },
+        body: { newPassword: 'neuespass1' },
+      })
+      expect(res.status).toBe(200)
+      expect(await flagOf('josh')).toBe(0)
+      await expect(login('josh', 'geheim123')).rejects.toThrow()
+      await login('josh', 'neuespass1')
+    })
+
+    it('lehnt das unveränderte Passwort auch ohne aktuelles Passwort ab', async () => {
+      await createUser('josh', 'geheim123', false, true)
+      const cookie = await login('josh', 'geheim123')
+      const res = await api('/api/auth/password', {
+        method: 'POST',
+        cookie,
+        body: { newPassword: 'geheim123' },
       })
       expect(res.status).toBe(400)
       expect(await flagOf('josh')).toBe(1)
