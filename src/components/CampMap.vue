@@ -79,9 +79,6 @@ const campStartFestival = computed(() => getCountdown(endDateFestival))
 // Zufahrt in den zwei Tagen zwischen Camp-Start und Festival-Start
 const roadProgress = computed(() => progressBetween(startDateZelt, endDateZelt))
 const drivewayProgress = computed(() => progressBetween(endDateZelt, endDateFestival))
-const totalPercent = computed(() =>
-  Math.floor(progressBetween(startDateZelt, endDateFestival) * 100),
-)
 
 const stations = computed(() => {
   const campReached = roadProgress.value >= 1
@@ -137,7 +134,7 @@ onUnmounted(() => {
         class="map"
         :viewBox="`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`"
         role="img"
-        :aria-label="`Route von Zuhause über das Camp zum Festival – ${totalPercent} % geschafft`"
+        aria-label="Route von Zuhause über das Camp zum Festival"
       >
         <defs>
           <filter id="route-glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -208,7 +205,6 @@ onUnmounted(() => {
       <!-- Beschriftungen neben den Stationen -->
       <div class="home-caption" :style="{ top: toPercentY(HOME.y) }">
         <strong>Zuhause</strong>
-        <span>{{ totalPercent }} % geschafft</span>
       </div>
 
       <router-link
@@ -400,12 +396,6 @@ $side: 60%;
 
   strong {
     font-size: 0.95rem;
-  }
-
-  span {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--c-accent);
   }
 }
 
