@@ -51,6 +51,13 @@ describe('Sessions', () => {
     expect(await sessionIds()).toEqual([])
   })
 
+  it('createSession räumt abgelaufene Sessions aller Benutzer auf', async () => {
+    const other = await insertUser('anna')
+    await createSession(env.DB, other, Date.now() - 2_592_001_000)
+    const current = await createSession(env.DB, userId)
+    expect(await sessionIds()).toEqual([current.sessionId])
+  })
+
   it('unbekanntes Token ergibt null', async () => {
     expect(await getSession(env.DB, 'unbekannt')).toBeNull()
   })

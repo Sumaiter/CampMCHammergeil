@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { assertDeletable } from '../routes/admin'
+import { deleteUserUnlessLastAdmin } from '../routes/admin'
 import { api, createUser, login, me, resetDb } from './helpers'
 
 type ListBody = {
@@ -137,6 +137,13 @@ describe('/api/admin', () => {
       await expect(login('josh', 'geheim123')).rejects.toThrow()
     })
 
+    it('behält beim eigenen Konto die aktuelle Session, andere Sessions enden', async () => {
+      const otherBossCookie = await login('boss', 'geheim123')
+      expect((await resetViaApi(bossId, 'neuespass1')).status).toBe(200)
+      expect(await me(adminCookie)).toMatchObject({ username: 'boss' })
+      expect(await me(otherBossCookie)).toBeNull()
+    })
+
     it('lehnt zu kurzes Passwort mit 400 ab', async () => {
       expect((await resetViaApi(joshId, 'kurz')).status).toBe(400)
     })
@@ -147,24 +154,29 @@ describe('/api/admin', () => {
   })
 })
 
-describe('assertDeletable', () => {
-  it('verbietet das Löschen des letzten Admins', () => {
-    expect(() => assertDeletable({ id: 2, isAdmin: true }, 1, 1)).toThrow(
-      'Der letzte Admin kann nicht gelöscht werden',
-    )
+describe('deleteUserUnlessLastAdmin', () => {
+  const userCount = async () =>
+    (await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>())!.n
+
+  beforeEach(resetDb)
+
+  it('löscht den letzten Admin nicht', async () => {
+    const id = await createUser('boss', 'geheim123', true)
+    expect(await deleteUserUnlessLastAdmin(env.DB, id)).toBe(false)
+    expect(await userCount()).toBe(1)
   })
 
-  it('verbietet das Löschen des eigenen Kontos', () => {
-    expect(() => assertDeletable({ id: 1, isAdmin: true }, 1, 2)).toThrow(
-      'Du kannst dein eigenes Konto nicht löschen',
-    )
+  it('löscht einen Admin, wenn ein weiterer übrig bleibt', async () => {
+    await createUser('boss', 'geheim123', true)
+    const id = await createUser('boss2', 'geheim123', true)
+    expect(await deleteUserUnlessLastAdmin(env.DB, id)).toBe(true)
+    expect(await userCount()).toBe(1)
   })
 
-  it('erlaubt das Löschen eines Admins, wenn weitere übrig bleiben', () => {
-    expect(() => assertDeletable({ id: 2, isAdmin: true }, 1, 2)).not.toThrow()
-  })
-
-  it('erlaubt das Löschen normaler Benutzer', () => {
-    expect(() => assertDeletable({ id: 2, isAdmin: false }, 1, 1)).not.toThrow()
+  it('löscht normale Benutzer', async () => {
+    await createUser('boss', 'geheim123', true)
+    const id = await createUser('josh', 'geheim123')
+    expect(await deleteUserUnlessLastAdmin(env.DB, id)).toBe(true)
+    expect(await userCount()).toBe(1)
   })
 })

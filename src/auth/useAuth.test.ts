@@ -83,6 +83,16 @@ describe('useAuth', () => {
     expect(auth.user.value).toBeNull()
   })
 
+  it('logout gilt bei 401 als erfolgreich, weil die Session schon beendet ist', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { user: josh }))
+    fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: 'Nicht eingeloggt' }))
+    const { useAuth } = await load()
+    const auth = useAuth()
+    await auth.login('josh', 'geheim123')
+    await expect(auth.logout()).resolves.toBeUndefined()
+    expect(auth.user.value).toBeNull()
+  })
+
   it('setzt user auf null, wenn irgendeine Anfrage 401 liefert', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { user: josh }))
     fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: 'Nicht eingeloggt' }))

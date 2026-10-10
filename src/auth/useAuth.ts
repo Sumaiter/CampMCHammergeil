@@ -1,5 +1,5 @@
 import { computed, readonly, ref } from 'vue'
-import { api, onUnauthorized } from '@/api/client'
+import { api, ApiError, onUnauthorized } from '@/api/client'
 import type { User } from '@/api/types'
 
 // Globaler Login-Zustand – einmal pro Seitenaufruf vom Server geladen.
@@ -33,6 +33,9 @@ async function login(username: string, password: string): Promise<void> {
 async function logout(): Promise<void> {
   try {
     await api.post('/api/auth/logout')
+  } catch (err) {
+    // 401: Session war schon beendet (abgelaufen, Passwort-Reset) – Ziel ist also erreicht.
+    if (!(err instanceof ApiError && err.status === 401)) throw err
   } finally {
     user.value = null
   }

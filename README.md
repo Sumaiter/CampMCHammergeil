@@ -52,6 +52,18 @@ npm run lint
 Die Seite läuft als Cloudflare Worker: `/api/*` beantwortet der Worker (`worker/`), alles andere
 ist die Vue-App. Benutzer und Sessions liegen in der D1-Datenbank `campmchammergeil`.
 
+Erste Einrichtung lokal (einmalig, in dieser Reihenfolge – ohne Migration liefert der Login 500):
+
+```sh
+npm run db:migrate:local               # Tabellen in der lokalen D1 anlegen
+npm run create-admin -- <name>         # ersten Admin anlegen (fragt nach dem Passwort)
+npm run dev
+```
+
+`create-admin` ist ein TypeScript-Skript, das Node direkt ausführt – dafür ist Node ≥ 22.18 nötig.
+
+Alle Befehle:
+
 ```sh
 npm run dev                            # App + API + lokale D1 (Vite + @cloudflare/vite-plugin)
 npm test                               # Worker- und Frontend-Tests (Vitest)

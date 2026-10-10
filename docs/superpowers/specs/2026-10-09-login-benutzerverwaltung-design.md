@@ -245,7 +245,7 @@ Schritte durch den Betreiber (Anleitung wird bei der Umsetzung geliefert):
   - `auth`:
     - Login korrekt/falsch/unbekannter Benutzer mit identischer Meldung
     - Cookie-Attribute, `me` mit und ohne Cookie, abgelaufene Session, Logout
-    - Passwort ändern (falsches aktuelles Passwort → 401, andere Sessions gelöscht, aktuelle bleibt)
+    - Passwort ändern (falsches aktuelles Passwort → 400, andere Sessions gelöscht, aktuelle bleibt)
     - Rate Limit → 429
     - fehlender JSON-Content-Type → 415
   - `admin`:

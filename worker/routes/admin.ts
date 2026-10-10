@@ -15,16 +15,17 @@ type UserRow = { id: number; username: string; is_admin: number; created_at: str
 
 const NOT_FOUND = 'Benutzer nicht gefunden'
 
-// Schutzregeln, damit sich niemand aussperrt.
-export function assertDeletable(
-  target: { id: number; isAdmin: boolean },
-  actorId: number,
-  adminCount: number,
-): void {
-  if (target.id === actorId) throw new HttpError(403, 'Du kannst dein eigenes Konto nicht löschen')
-  if (target.isAdmin && adminCount <= 1) {
-    throw new HttpError(403, 'Der letzte Admin kann nicht gelöscht werden')
-  }
+// Prüfung und Löschen in einem Statement, damit zwei Admins, die sich gleichzeitig gegenseitig
+// löschen, nicht beide durchkommen. Sessions verschwinden per ON DELETE CASCADE.
+export async function deleteUserUnlessLastAdmin(db: D1Database, id: number): Promise<boolean> {
+  const { meta } = await db
+    .prepare(
+      `DELETE FROM users WHERE id = ?
+         AND (is_admin = 0 OR (SELECT COUNT(*) FROM users WHERE is_admin = 1) > 1)`,
+    )
+    .bind(id)
+    .run()
+  return meta.changes > 0
 }
 
 function parseId(value: string): number {
@@ -86,17 +87,12 @@ adminRoutes.post('/users', async (c) => {
 
 adminRoutes.delete('/users/:id', async (c) => {
   const target = await findUser(c.env.DB, parseId(c.req.param('id')))
-  const admins = await c.env.DB.prepare(
-    'SELECT COUNT(*) AS count FROM users WHERE is_admin = 1',
-  ).first<{ count: number }>()
-  assertDeletable(
-    { id: target.id, isAdmin: target.is_admin === 1 },
-    c.var.user!.id,
-    admins?.count ?? 0,
-  )
-
-  // Sessions verschwinden per ON DELETE CASCADE
-  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(target.id).run()
+  if (target.id === c.var.user!.id) {
+    throw new HttpError(403, 'Du kannst dein eigenes Konto nicht löschen')
+  }
+  if (!(await deleteUserUnlessLastAdmin(c.env.DB, target.id))) {
+    throw new HttpError(403, 'Der letzte Admin kann nicht gelöscht werden')
+  }
   return c.json({ ok: true })
 })
 
@@ -108,6 +104,8 @@ adminRoutes.post('/users/:id/password', async (c) => {
   await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
     .bind(await hashPassword(password), target.id)
     .run()
-  await deleteUserSessions(c.env.DB, target.id)
+  // Setzt ein Admin sein eigenes Passwort zurück, bleibt er in dieser Sitzung eingeloggt.
+  const keep = target.id === c.var.user!.id ? c.var.sessionId! : undefined
+  await deleteUserSessions(c.env.DB, target.id, keep)
   return c.json({ ok: true })
 })

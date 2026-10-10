@@ -22,11 +22,15 @@ export async function createSession(
 ): Promise<{ token: string; sessionId: string }> {
   const token = toBase64Url(crypto.getRandomValues(new Uint8Array(32)))
   const sessionId = await hashToken(token)
-  const expiresAt = Math.floor(now / 1000) + SESSION_TTL_SECONDS
-  await db
-    .prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)')
-    .bind(sessionId, userId, expiresAt)
-    .run()
+  const nowSeconds = Math.floor(now / 1000)
+  // Abgelaufene Sessions bei jedem Login aufräumen – verlassene Sessions (Browser zu, kein
+  // Logout) würden sonst für immer in der DB liegen bleiben.
+  await db.batch([
+    db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(nowSeconds),
+    db
+      .prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)')
+      .bind(sessionId, userId, nowSeconds + SESSION_TTL_SECONDS),
+  ])
   return { token, sessionId }
 }
 
