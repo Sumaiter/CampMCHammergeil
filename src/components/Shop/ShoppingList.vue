@@ -56,8 +56,8 @@ onMounted(loadOrders)
 
     <section class="card glass-card">
       <p class="hint">
-        Solange der Admin die Liste nicht gedruckt hat, kannst du Mengen ändern oder Positionen
-        löschen. Danach findest du sie in der Übersicht.
+        Solange die Liste nicht gedruckt wurde, kannst du Mengen ändern oder Positionen löschen.
+        Danach findest du sie in der Übersicht.
       </p>
 
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
