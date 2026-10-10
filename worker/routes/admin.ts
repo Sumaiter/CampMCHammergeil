@@ -71,7 +71,7 @@ adminRoutes.post('/users', async (c) => {
   let row: { id: number } | null
   try {
     row = await c.env.DB.prepare(
-      'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?) RETURNING id',
+      'INSERT INTO users (username, password_hash, is_admin, must_change_password) VALUES (?, ?, ?, 1) RETURNING id',
     )
       .bind(username, await hashPassword(password), isAdmin ? 1 : 0)
       .first<{ id: number }>()
@@ -101,7 +101,10 @@ adminRoutes.post('/users/:id/password', async (c) => {
   const body = await readJson<{ password: unknown }>(c)
   const password = validatePassword(body.password)
 
-  await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+  // Das vom Admin vergebene Passwort ist nur vorläufig – der Benutzer muss es selbst ändern.
+  await c.env.DB.prepare(
+    'UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?',
+  )
     .bind(await hashPassword(password), target.id)
     .run()
   // Setzt ein Admin sein eigenes Passwort zurück, bleibt er in dieser Sitzung eingeloggt.

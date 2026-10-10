@@ -40,6 +40,7 @@ type SessionRow = {
   id: number
   username: string
   is_admin: number
+  must_change_password: number
 }
 
 export async function getSession(
@@ -50,7 +51,7 @@ export async function getSession(
   const sessionId = await hashToken(token)
   const row = await db
     .prepare(
-      `SELECT s.id AS session_id, s.expires_at, u.id, u.username, u.is_admin
+      `SELECT s.id AS session_id, s.expires_at, u.id, u.username, u.is_admin, u.must_change_password
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.id = ?`,
     )
@@ -65,7 +66,12 @@ export async function getSession(
 
   return {
     sessionId: row.session_id,
-    user: { id: row.id, username: row.username, isAdmin: row.is_admin === 1 },
+    user: {
+      id: row.id,
+      username: row.username,
+      isAdmin: row.is_admin === 1,
+      mustChangePassword: row.must_change_password === 1,
+    },
   }
 }
 

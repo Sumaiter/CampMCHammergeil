@@ -13,6 +13,9 @@ type Target = { path: string; fullPath: string; meta: RouteMeta }
 
 // Entscheidet, ob eine Navigation erlaubt ist (true) oder wohin umgeleitet wird.
 export function resolveNavigation(to: Target, user: User | null): string | true {
+  // Solange das Passwort geändert werden muss, ist nur die Kontoseite erreichbar.
+  if (user?.mustChangePassword) return to.path === RoutePath.Account ? true : RoutePath.Account
+
   if (to.path === RoutePath.Login && user) return RoutePath.Account
 
   if ((to.meta.requiresAuth || to.meta.requiresAdmin) && !user) {

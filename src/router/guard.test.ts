@@ -3,8 +3,10 @@ import type { RouteMeta } from 'vue-router'
 import type { User } from '@/api/types'
 import { resolveNavigation, safeRedirect } from './guard'
 
-const user: User = { id: 1, username: 'josh', isAdmin: false }
-const admin: User = { id: 2, username: 'boss', isAdmin: true }
+const user: User = { id: 1, username: 'josh', isAdmin: false, mustChangePassword: false }
+const admin: User = { id: 2, username: 'boss', isAdmin: true, mustChangePassword: false }
+const pending: User = { ...user, mustChangePassword: true }
+const pendingAdmin: User = { ...admin, mustChangePassword: true }
 
 const to = (path: string, meta: RouteMeta = {}, fullPath = path) => ({ path, fullPath, meta })
 
@@ -43,6 +45,29 @@ describe('resolveNavigation', () => {
 
   it('zeigt den Login ohne Anmeldung', () => {
     expect(resolveNavigation(to('/login'), null)).toBe(true)
+  })
+})
+
+describe('resolveNavigation bei ausstehender Passwortänderung', () => {
+  it.each([
+    ['/', {}],
+    ['/shop', { requiresAuth: true }],
+    ['/login', {}],
+    ['/datenschutz', {}],
+  ])('schickt %s zur Kontoseite', (path, meta) => {
+    expect(resolveNavigation(to(path, meta), pending)).toBe('/konto')
+  })
+
+  it('schickt auch Admins von Admin-Seiten zur Kontoseite', () => {
+    expect(resolveNavigation(to('/admin', { requiresAdmin: true }), pendingAdmin)).toBe('/konto')
+  })
+
+  it('lässt die Kontoseite durch', () => {
+    expect(resolveNavigation(to('/konto', { requiresAuth: true }), pending)).toBe(true)
+  })
+
+  it('lässt nach erfolgter Änderung wieder alles zu', () => {
+    expect(resolveNavigation(to('/shop', { requiresAuth: true }), user)).toBe(true)
   })
 })
 

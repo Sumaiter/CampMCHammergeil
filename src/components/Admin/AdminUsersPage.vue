@@ -48,7 +48,7 @@ async function createUser() {
       username: newUsername.value,
       password: newPassword.value,
     })
-    createSuccess.value = `Benutzer „${data.user.username}“ angelegt.`
+    createSuccess.value = `Benutzer „${data.user.username}“ angelegt. Das Startpasswort muss beim ersten Login geändert werden.`
     newUsername.value = ''
     newPassword.value = ''
     await loadUsers()
@@ -77,7 +77,7 @@ async function saveReset(target: AdminUser) {
     closeReset()
     rowMessage.value = {
       id: target.id,
-      text: `Passwort für „${target.username}“ zurückgesetzt.`,
+      text: `Passwort für „${target.username}“ zurückgesetzt. Es muss beim nächsten Login geändert werden.`,
       error: false,
     }
   } catch (err) {

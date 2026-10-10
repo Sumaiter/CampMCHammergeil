@@ -4,10 +4,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { useAuth } from '@/auth/useAuth'
 import { safeRedirect } from '@/router/guard'
+import { RoutePath } from '@/router/routePath'
 
 const route = useRoute()
 const router = useRouter()
-const { login } = useAuth()
+const { user: authUser, login } = useAuth()
 
 const user = ref('')
 const password = ref('')
@@ -19,8 +20,11 @@ async function submit() {
   pending.value = true
   try {
     await login(user.value, password.value)
-    // Zurück zur ursprünglich gewünschten Seite (nur interne Pfade)
-    await router.replace(safeRedirect(route.query.redirect))
+    // Zurück zur ursprünglich gewünschten Seite (nur interne Pfade) – außer das Passwort muss
+    // noch geändert werden, dann geht es direkt zur Kontoseite.
+    await router.replace(
+      authUser.value?.mustChangePassword ? RoutePath.Account : safeRedirect(route.query.redirect),
+    )
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : 'Login fehlgeschlagen'
   } finally {

@@ -41,7 +41,7 @@ describe('Sessions', () => {
     const { token, sessionId } = await createSession(env.DB, userId)
     expect(await getSession(env.DB, token)).toEqual({
       sessionId,
-      user: { id: userId, username: 'josh', isAdmin: false },
+      user: { id: userId, username: 'josh', isAdmin: false, mustChangePassword: false },
     })
   })
 

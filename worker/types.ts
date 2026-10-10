@@ -1,4 +1,9 @@
-export type User = { id: number; username: string; isAdmin: boolean }
+export type User = {
+  id: number
+  username: string
+  isAdmin: boolean
+  mustChangePassword: boolean
+}
 
 export type AppEnv = {
   Bindings: Env

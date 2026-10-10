@@ -7,6 +7,8 @@ export class HttpError extends Error {
   constructor(
     public status: HttpErrorStatus,
     message: string,
+    // Maschinenlesbarer Fehlercode für den Client (optional).
+    public code?: string,
   ) {
     super(message)
   }
