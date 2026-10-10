@@ -65,11 +65,9 @@ describe('parsePrice', () => {
 })
 
 describe('paypalPayUrl', () => {
-  it('baut den Link mit Punkt-Betrag und kodiertem Verwendungszweck', () => {
-    expect(paypalPayUrl(1250)).toBe(
-      'https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=joshua.nierentz%40gmail.com&currency_code=EUR&amount=12.50&item_name=Camp%20MC%20Hammergeil%20Einkauf',
-    )
-    expect(paypalPayUrl(5)).toContain('amount=0.05')
-    expect(paypalPayUrl(123456)).toContain('amount=1234.56')
+  it('baut den PayPal.Me-Link mit Punkt-Betrag', () => {
+    expect(paypalPayUrl(1250)).toBe('https://paypal.me/joshuaniernetz/12.50EUR')
+    expect(paypalPayUrl(5)).toBe('https://paypal.me/joshuaniernetz/0.05EUR')
+    expect(paypalPayUrl(123456)).toBe('https://paypal.me/joshuaniernetz/1234.56EUR')
   })
 })

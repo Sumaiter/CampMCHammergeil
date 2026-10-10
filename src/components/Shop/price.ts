@@ -27,14 +27,7 @@ export function formatPriceOrDash(cents: number | null): string {
   return cents === null ? '–' : formatPrice(cents)
 }
 
-// PayPal-Zahlungslink (Betrag in Euro mit Punkt und 2 Nachkommastellen)
+// PayPal.Me-Link (Freunde & Familie) mit vorausgefülltem Betrag in Euro
 export function paypalPayUrl(cents: number): string {
-  const params = [
-    'cmd=_xclick',
-    'business=joshua.nierentz%40gmail.com',
-    'currency_code=EUR',
-    `amount=${(cents / 100).toFixed(2)}`,
-    `item_name=${encodeURIComponent('Camp MC Hammergeil Einkauf')}`,
-  ]
-  return `https://www.paypal.com/cgi-bin/webscr?${params.join('&')}`
+  return `https://paypal.me/joshuaniernetz/${(cents / 100).toFixed(2)}EUR`
 }
