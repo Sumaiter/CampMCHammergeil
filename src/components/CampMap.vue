@@ -444,7 +444,9 @@ $side: 60%;
 .countdown {
   display: flex;
   flex-direction: column;
-  width: calc(100% - #{$side} - 2px);
+  // So breit wie der Inhalt, aber nie breiter als der Platz neben der Karte
+  width: max-content;
+  max-width: calc(100% - #{$side} - 2px);
   padding: 10px clamp(10px, 2.5vw, 14px);
 
   background: var(--c-surface);
@@ -502,7 +504,7 @@ $side: 60%;
 /* Auf breiten Bildschirmen dürfen die Karten über die Karte hinausragen */
 @media (min-width: 640px) {
   .countdown {
-    width: 210px;
+    max-width: none;
   }
 }
 
