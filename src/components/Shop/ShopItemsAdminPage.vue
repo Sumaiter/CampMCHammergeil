@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, errorMessage } from '@/api/client'
 import type { ShopItem } from '@/api/types'
-import { centsToInput, formatPrice, parsePrice } from './price'
+import { centsToInput, parsePrice } from './price'
 
 const items = ref<ShopItem[]>([])
 const loading = ref(true)
@@ -15,12 +15,70 @@ const createError = ref('')
 const createSuccess = ref('')
 const creating = ref(false)
 
-// Zeile bearbeiten (immer nur eine gleichzeitig)
-const editId = ref<number | null>(null)
-const editName = ref('')
-const editPrice = ref('')
-const editError = ref('')
+// Alle Zeilen sind direkt editierbar; Entwürfe pro Artikel-ID, gespeichert wird gesammelt.
+type Draft = { name: string; price: string }
+const drafts = ref<Record<number, Draft>>({})
+const rowErrors = ref<Record<number, string>>({})
+const saveError = ref('')
+const saveSuccess = ref('')
 const saving = ref(false)
+
+const toDraft = (item: ShopItem): Draft => ({
+  name: item.name,
+  price: centsToInput(item.priceCents),
+})
+
+function resetDrafts(list: ShopItem[]) {
+  drafts.value = Object.fromEntries(list.map((item) => [item.id, toDraft(item)]))
+}
+
+function isChanged(item: ShopItem): boolean {
+  const draft = drafts.value[item.id]
+  if (!draft) return false
+  const price = parsePrice(draft.price)
+  return draft.name.trim() !== item.name || !price.ok || price.cents !== item.priceCents
+}
+
+const changedItems = computed(() => items.value.filter(isChanged))
+
+async function saveAll() {
+  saveError.value = ''
+  saveSuccess.value = ''
+  rowErrors.value = {}
+
+  const updates: { item: ShopItem; name: string; priceCents: number | null }[] = []
+  for (const item of changedItems.value) {
+    const draft = drafts.value[item.id]!
+    const price = parsePrice(draft.price)
+    if (!price.ok) rowErrors.value[item.id] = 'Ungültiger Preis, z. B. 1,50'
+    else if (!draft.name.trim()) rowErrors.value[item.id] = 'Name fehlt'
+    else updates.push({ item, name: draft.name.trim(), priceCents: price.cents })
+  }
+  if (Object.keys(rowErrors.value).length > 0) {
+    saveError.value = 'Bitte die markierten Zeilen korrigieren.'
+    return
+  }
+
+  saving.value = true
+  const results = await Promise.allSettled(
+    updates.map(({ item, name, priceCents }) =>
+      api.put<{ item: ShopItem }>(`/api/shop/items/${item.id}`, { name, priceCents }),
+    ),
+  )
+  saving.value = false
+
+  const saved = new Map<number, ShopItem>()
+  results.forEach((result, index) => {
+    const id = updates[index]!.item.id
+    if (result.status === 'fulfilled') saved.set(id, result.value.item)
+    else rowErrors.value[id] = errorMessage(result.reason, 'Konnte nicht gespeichert werden')
+  })
+  items.value = sortItems(items.value.map((entry) => saved.get(entry.id) ?? entry))
+  for (const item of saved.values()) drafts.value[item.id] = toDraft(item)
+
+  if (saved.size < updates.length) saveError.value = 'Nicht alle Änderungen wurden gespeichert.'
+  else saveSuccess.value = `${saved.size} Artikel gespeichert.`
+}
 
 const sortItems = (list: ShopItem[]) =>
   [...list].sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }))
@@ -29,6 +87,7 @@ async function loadItems() {
   try {
     const data = await api.get<{ items: ShopItem[] }>('/api/shop/items')
     items.value = sortItems(data.items)
+    resetDrafts(items.value)
     listError.value = ''
   } catch (err) {
     listError.value = errorMessage(err, 'Artikel konnten nicht geladen werden')
@@ -52,6 +111,7 @@ async function createItem() {
       priceCents: price.cents,
     })
     items.value = sortItems([...items.value, data.item])
+    drafts.value[data.item.id] = toDraft(data.item)
     createSuccess.value = `Artikel „${data.item.name}“ hinzugefügt.`
     newName.value = ''
     newPrice.value = ''
@@ -59,40 +119,6 @@ async function createItem() {
     createError.value = errorMessage(err, 'Artikel konnte nicht hinzugefügt werden')
   } finally {
     creating.value = false
-  }
-}
-
-function startEdit(item: ShopItem) {
-  editId.value = item.id
-  editName.value = item.name
-  editPrice.value = centsToInput(item.priceCents)
-  editError.value = ''
-}
-
-function cancelEdit() {
-  editId.value = null
-  editError.value = ''
-}
-
-async function saveEdit(item: ShopItem) {
-  editError.value = ''
-  const price = parsePrice(editPrice.value)
-  if (!price.ok) {
-    editError.value = 'Bitte einen gültigen Preis eingeben, z. B. 1,50'
-    return
-  }
-  saving.value = true
-  try {
-    const data = await api.put<{ item: ShopItem }>(`/api/shop/items/${item.id}`, {
-      name: editName.value.trim(),
-      priceCents: price.cents,
-    })
-    items.value = sortItems(items.value.map((entry) => (entry.id === item.id ? data.item : entry)))
-    cancelEdit()
-  } catch (err) {
-    editError.value = errorMessage(err, 'Artikel konnte nicht gespeichert werden')
-  } finally {
-    saving.value = false
   }
 }
 
@@ -136,63 +162,47 @@ onMounted(loadItems)
       <p v-if="listError" class="form-error" role="alert">{{ listError }}</p>
       <p v-else-if="!loading && items.length === 0" class="empty">Noch keine Artikel angelegt.</p>
 
-      <ul class="shop-plain-list">
-        <li v-for="item in items" :key="item.id" class="item-row">
-          <form
-            v-if="editId === item.id"
-            class="edit-form"
-            @submit.prevent="saveEdit(item)"
-            @keydown.esc="cancelEdit"
+      <form v-if="items.length > 0" @submit.prevent="saveAll">
+        <ul class="shop-plain-list">
+          <li
+            v-for="item in items"
+            :key="item.id"
+            class="item-row"
+            :class="{ changed: isChanged(item) }"
           >
-            <div class="edit-fields">
-              <label class="form-field">
-                <span>Name</span>
+            <template v-if="drafts[item.id]">
+              <input
+                v-model="drafts[item.id]!.name"
+                class="form-input"
+                autocomplete="off"
+                maxlength="100"
+                :aria-label="`Name von ${item.name}`"
+              />
+              <div class="price-field">
                 <input
-                  v-model="editName"
-                  class="form-input"
-                  autocomplete="off"
-                  maxlength="100"
-                  required
-                />
-              </label>
-              <label class="form-field">
-                <span>Preis in €</span>
-                <input
-                  v-model="editPrice"
+                  v-model="drafts[item.id]!.price"
                   class="form-input"
                   inputmode="decimal"
                   autocomplete="off"
-                  placeholder="z. B. 1,50"
+                  placeholder="kein Preis"
+                  :aria-label="`Preis von ${item.name} in Euro`"
                 />
-              </label>
-            </div>
+                <span aria-hidden="true">€</span>
+              </div>
+            </template>
+            <p v-if="rowErrors[item.id]" class="form-error row-error" role="alert">
+              {{ rowErrors[item.id] }}
+            </p>
+          </li>
+        </ul>
 
-            <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
+        <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
+        <p v-if="saveSuccess" class="form-success" role="status">{{ saveSuccess }}</p>
 
-            <div class="row-buttons">
-              <button type="submit" class="btn btn-small" :disabled="saving">Speichern</button>
-              <button type="button" class="btn btn-secondary btn-small" @click="cancelEdit">
-                Abbrechen
-              </button>
-            </div>
-          </form>
-
-          <template v-else>
-            <div class="shop-item-info">
-              <strong class="item-name">{{ item.name }}</strong>
-              <small>{{ formatPrice(item.priceCents) }}</small>
-            </div>
-            <button
-              type="button"
-              class="btn btn-secondary btn-small"
-              :disabled="editId !== null"
-              @click="startEdit(item)"
-            >
-              Bearbeiten
-            </button>
-          </template>
-        </li>
-      </ul>
+        <button type="submit" class="btn save-all" :disabled="saving || changedItems.length === 0">
+          Speichern{{ changedItems.length > 0 ? ` (${changedItems.length})` : '' }}
+        </button>
+      </form>
     </section>
   </div>
 </template>
@@ -213,8 +223,7 @@ onMounted(loadItems)
   }
 }
 
-.create-fields,
-.edit-fields {
+.create-fields {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 1rem;
@@ -226,41 +235,47 @@ onMounted(loadItems)
 
 .item-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 2fr 1fr;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.9rem 0;
+  padding: 0.6rem 0;
 
   & + & {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .edit-form {
-    grid-column: 1 / -1;
+  &.changed .form-input {
+    border-color: var(--c-accent);
   }
 }
 
-.edit-form {
+.price-field {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.4rem;
+
+  .form-input {
+    text-align: right;
+  }
 }
 
-.row-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.row-error {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
-/* 📱 MOBILE: Felder und Aktionen untereinander */
+.save-all {
+  margin-top: 0.75rem;
+}
+
+/* 📱 MOBILE: Felder untereinander */
 @media (max-width: 600px) {
-  .create-fields,
-  .edit-fields {
+  .create-fields {
     grid-template-columns: 1fr;
   }
 
-  .row-buttons .btn {
-    flex: 1 1 auto;
+  .item-row {
+    grid-template-columns: 1fr 7rem;
   }
 }
 </style>
