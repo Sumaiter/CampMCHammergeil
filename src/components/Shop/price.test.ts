@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centsToInput, formatPrice, parsePrice } from './price'
+import { centsToInput, formatPrice, formatPriceOrDash, parsePrice } from './price'
 
 // Intl nutzt ein geschütztes Leerzeichen vor dem Euro-Zeichen.
 const normalize = (value: string) => value.replace(/ /g, ' ')
@@ -14,6 +14,13 @@ describe('formatPrice', () => {
 
   it('zeigt "kein Preis" bei null', () => {
     expect(formatPrice(null)).toBe('kein Preis')
+  })
+})
+
+describe('formatPriceOrDash', () => {
+  it('zeigt einen Strich bei null', () => {
+    expect(formatPriceOrDash(null)).toBe('–')
+    expect(normalize(formatPriceOrDash(150))).toBe('1,50 €')
   })
 })
 

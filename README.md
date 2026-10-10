@@ -1,51 +1,26 @@
 # CampMCHammergeil
 
-This template should help get you started developing with Vue 3 in Vite.
+Webseite für das Camp MC Hammergeil: Countdown-Karte bis zum Camp und Festival, Login mit
+Benutzerkonto sowie ein Einkaufs-Shop (Artikelliste, Bestellungen, Druck der Einkaufslisten,
+Übersicht und Salden). Admins verwalten Benutzer, Artikel und gedruckte Listen.
 
-## Recommended IDE Setup
+- Frontend: Vue 3 (`<script setup>`, TypeScript, SCSS), Vue Router, Vite
+- Backend: Cloudflare Worker mit Hono und D1-Datenbank (siehe unten)
+- Tests: Vitest; Linting mit oxlint und ESLint, Formatierung mit Prettier
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+## Entwicklung
 
 ```sh
 npm install
+npm run dev          # Dev-Server (App + API + lokale D1)
+npm run build        # Type-Check + Produktions-Build
+npm run type-check   # nur Typen prüfen
+npm run lint         # oxlint + ESLint (mit --fix)
+npm run format       # Prettier auf src/
 ```
 
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-npm run build
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
-```
+Projektstruktur: `src/` (Vue-App, `src/api` = API-Client, `src/components/Shop` = Shop),
+`worker/` (API), `migrations/` (D1-Schema), `scripts/` (Hilfsskripte).
 
 ## Backend (Cloudflare Worker + D1)
 

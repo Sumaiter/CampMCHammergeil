@@ -249,6 +249,12 @@ input {
   color: var(--c-accent);
 }
 
+// Warnfarbe für destruktive Aktionen, kombiniert mit .btn-secondary (z. B. Löschen)
+.btn-danger {
+  border-color: rgba(255, 138, 138, 0.5);
+  color: #ff8a8a;
+}
+
 .form-error {
   font-size: 0.9rem;
   color: #ff8a8a;
@@ -270,4 +276,180 @@ input {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+// ---------- Shop (geteilt von src/components/Shop) ----------
+
+// Karte einer Shop-Seite (zusammen mit .glass-card)
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: clamp(1.25rem, 5vw, 2rem);
+
+  // Dunkle Optionsliste in Auswahlfeldern
+  select.form-input option {
+    background: #111a16;
+    color: var(--c-text);
+  }
+}
+
+// Liste ohne Aufzählungszeichen
+.shop-plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+// Name + Nebenzeile (z. B. Preis) untereinander
+.shop-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+
+  .item-name {
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    color: var(--c-text-muted);
+  }
+}
+
+// Summenzeile
+.shop-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-size: 1.1rem;
+
+  strong {
+    color: var(--c-accent);
+  }
+}
+
+.btn-small {
+  min-height: 40px;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+// Mengenfeld in Tabellenzeilen
+.shop-qty-input {
+  width: 5.5rem;
+  min-height: 40px;
+  padding: 0.4rem 0.6rem;
+  text-align: right;
+}
+
+.shop-table-wrap {
+  overflow-x: auto;
+}
+
+// Bestelltabelle; Zellen brauchen data-label für die mobile Kartenansicht
+.shop-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 0.65rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  th {
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--c-text-muted);
+  }
+
+  .num {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .name {
+    overflow-wrap: anywhere;
+  }
+
+  .name-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .order-hint {
+    color: var(--c-accent);
+  }
+
+  .date {
+    color: var(--c-text-muted);
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    border-bottom: 0;
+  }
+}
+
+// 📱 MOBILE: jede Zeile als kleine Karte statt Tabellenzeile
+@media (max-width: 600px) {
+  .shop-table {
+    thead {
+      display: none;
+    }
+
+    tr,
+    td {
+      display: block;
+    }
+
+    tr {
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.2rem 0;
+      border: 0;
+      text-align: right;
+
+      &::before {
+        content: attr(data-label);
+        color: var(--c-text-muted);
+        text-align: left;
+      }
+    }
+
+    .name {
+      font-weight: 700;
+
+      .name-text {
+        align-items: flex-end;
+      }
+    }
+
+    .actions {
+      padding-top: 0.5rem;
+
+      &::before {
+        content: none;
+      }
+
+      .btn {
+        flex: 1 1 auto;
+      }
+    }
+  }
 }

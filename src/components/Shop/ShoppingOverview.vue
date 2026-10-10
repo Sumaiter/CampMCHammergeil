@@ -1,30 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { api, ApiError } from '@/api/client'
-import type { ShopBalance, ShopOrder, ShopUser } from '@/api/types'
+import { api, errorMessage } from '@/api/client'
+import type { ShopBalance, ShopOrder } from '@/api/types'
 import { useAuth } from '@/auth/useAuth'
 import { RoutePath } from '@/router/routePath'
+import { formatDateTime, formatListTitle } from './date'
+import { formatLineTotal, groupByList, orderHint, ownTotal } from './orders'
 import { formatPrice } from './price'
 import { useOrderEdit } from './useOrderEdit'
-import {
-  formatDateTime,
-  formatLineTotal,
-  formatListTitle,
-  groupByList,
-  orderHint,
-  ownTotal,
-} from './user-orders'
+import { useShopUsers } from './useShopUsers'
 
-const { user, isAdmin } = useAuth()
-const meId = computed(() => user.value?.id ?? 0)
+const { isAdmin } = useAuth()
+const { meId, users, usersError, loadUsers, userOptions } = useShopUsers()
 
 const orders = ref<ShopOrder[]>([])
 const loading = ref(true)
 const loadError = ref('')
 
 // Admin: Benutzer, dessen Übersicht angezeigt wird (vorbelegt mit mir selbst)
-const users = ref<ShopUser[]>([])
-const usersError = ref('')
 const viewedId = ref<number | null>(null)
 const viewed = computed(() => viewedId.value ?? meId.value)
 
@@ -33,9 +26,6 @@ const showBalances = ref(false)
 const balances = ref<ShopBalance[]>([])
 const balancesLoading = ref(false)
 const balancesError = ref('')
-
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof ApiError ? err.message : fallback
 
 const groups = computed(() => groupByList(orders.value))
 const grand = computed(() => ownTotal(orders.value, viewed.value))
@@ -58,7 +48,7 @@ async function loadOverview() {
   } catch (err) {
     if (token !== loadToken) return
     orders.value = []
-    loadError.value = errorText(err, 'Übersicht konnte nicht geladen werden')
+    loadError.value = errorMessage(err, 'Übersicht konnte nicht geladen werden')
   } finally {
     if (token === loadToken) loading.value = false
   }
@@ -78,25 +68,6 @@ const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = use
 })
 watch(orders, syncDrafts, { immediate: true })
 
-async function loadUsers() {
-  try {
-    const data = await api.get<{ users: ShopUser[] }>('/api/shop/users')
-    users.value = data.users
-    usersError.value = ''
-  } catch (err) {
-    usersError.value = errorText(err, 'Benutzer konnten nicht geladen werden')
-  }
-}
-
-const userOptions = computed(() => {
-  const me = users.value.find((entry) => entry.id === meId.value)
-  const others = users.value.filter((entry) => entry.id !== meId.value)
-  return [
-    { id: meId.value, label: `Mich selbst (${me?.username ?? user.value?.username ?? ''})` },
-    ...others.map((entry) => ({ id: entry.id, label: entry.username })),
-  ]
-})
-
 async function loadBalances() {
   balancesLoading.value = true
   try {
@@ -104,7 +75,7 @@ async function loadBalances() {
     balances.value = data.balances
     balancesError.value = ''
   } catch (err) {
-    balancesError.value = errorText(err, 'Beträge konnten nicht geladen werden')
+    balancesError.value = errorMessage(err, 'Beträge konnten nicht geladen werden')
   } finally {
     balancesLoading.value = false
   }
@@ -138,7 +109,7 @@ onMounted(() => {
   <div class="page-section overview">
     <h1 class="page-title">Übersicht</h1>
 
-    <section v-if="isAdmin" class="card glass-card">
+    <section v-if="isAdmin" class="shop-card glass-card">
       <label v-if="users.length > 0" class="form-field">
         <span>Übersicht anzeigen für</span>
         <select v-model="viewedId" class="form-input">
@@ -164,8 +135,8 @@ onMounted(() => {
         <p v-if="balancesError" class="form-error" role="alert">{{ balancesError }}</p>
         <p v-else-if="balancesLoading" class="empty">Lädt …</p>
         <p v-else-if="balances.length === 0" class="empty">Es gibt noch keine gedruckten Listen.</p>
-        <div v-else class="table-wrap">
-          <table class="orders balances">
+        <div v-else class="shop-table-wrap">
+          <table class="shop-table balances">
             <thead>
               <tr>
                 <th>Benutzer</th>
@@ -190,7 +161,7 @@ onMounted(() => {
 
     <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
 
-    <section v-else-if="!loading && groups.length === 0" class="card glass-card">
+    <section v-else-if="!loading && groups.length === 0" class="shop-card glass-card">
       <p class="empty">
         <template v-if="viewingOther">
           Für {{ viewedName || 'diesen Benutzer' }} gibt es noch keine gedruckten Bestellungen.
@@ -203,8 +174,8 @@ onMounted(() => {
     </section>
 
     <template v-if="groups.length > 0">
-      <section class="card glass-card">
-        <p class="total">
+      <section class="shop-card glass-card">
+        <p class="shop-total">
           <span>{{ viewingOther ? `Gesamtsumme für ${viewedName}` : 'Deine Gesamtsumme' }}</span>
           <strong>{{ formatPrice(grand.totalCents) }}</strong>
         </p>
@@ -215,11 +186,11 @@ onMounted(() => {
         </p>
       </section>
 
-      <section v-for="group in groups" :key="group.listId" class="card glass-card">
+      <section v-for="group in groups" :key="group.listId" class="shop-card glass-card">
         <h2 class="list-title">{{ formatListTitle(group.printedAt) }}</h2>
 
-        <div class="table-wrap">
-          <table class="orders">
+        <div class="shop-table-wrap">
+          <table class="shop-table">
             <thead>
               <tr>
                 <th>Artikel</th>
@@ -244,7 +215,7 @@ onMounted(() => {
                   <input
                     v-if="isAdmin"
                     v-model="drafts[order.id]"
-                    class="form-input qty-input"
+                    class="form-input shop-qty-input"
                     type="number"
                     inputmode="numeric"
                     min="1"
@@ -284,7 +255,7 @@ onMounted(() => {
 
         <p v-if="isAdmin && actionError" class="form-error" role="alert">{{ actionError }}</p>
 
-        <p class="total">
+        <p class="shop-total">
           <span>Summe dieser Liste</span>
           <strong>{{ formatPrice(ownTotal(group.orders, viewed).totalCents) }}</strong>
         </p>
@@ -301,13 +272,6 @@ onMounted(() => {
   gap: 1.25rem;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: clamp(1.25rem, 5vw, 2rem);
-}
-
 .list-title {
   font-size: 1.15rem;
 }
@@ -322,80 +286,6 @@ onMounted(() => {
   font-weight: 700;
 }
 
-select.form-input option {
-  background: #111a16;
-  color: var(--c-text);
-}
-
-.table-wrap {
-  overflow-x: auto;
-}
-
-.orders {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    padding: 0.65rem 0.6rem;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  th {
-    font-size: 0.8rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--c-text-muted);
-  }
-
-  .num {
-    text-align: right;
-  }
-
-  td.num {
-    white-space: nowrap;
-  }
-
-  .name {
-    overflow-wrap: anywhere;
-  }
-
-  .name-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .date {
-    color: var(--c-text-muted);
-    white-space: nowrap;
-  }
-
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    border-bottom: 0;
-  }
-}
-
-.qty-input {
-  width: 5.5rem;
-  min-height: 40px;
-  padding: 0.4rem 0.6rem;
-  text-align: right;
-}
-
-.btn-danger {
-  border-color: rgba(255, 138, 138, 0.5);
-  color: #ff8a8a;
-}
-
-.order-hint {
-  color: var(--c-accent);
-}
-
 .balances .order-hint {
   display: block;
   color: var(--c-text-muted);
@@ -404,75 +294,5 @@ select.form-input option {
 
 .btn-small {
   align-self: flex-start;
-  min-height: 40px;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.9rem;
-}
-
-.total {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  font-size: 1.1rem;
-
-  strong {
-    color: var(--c-accent);
-  }
-}
-
-/* 📱 MOBILE: jede Bestellung als kleine Karte statt Tabellenzeile */
-@media (max-width: 600px) {
-  .orders {
-    thead {
-      display: none;
-    }
-
-    tr,
-    td {
-      display: block;
-    }
-
-    tr {
-      padding: 0.6rem 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    td {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.2rem 0;
-      border: 0;
-      text-align: right;
-
-      &::before {
-        content: attr(data-label);
-        color: var(--c-text-muted);
-        text-align: left;
-      }
-    }
-
-    .name {
-      font-weight: 700;
-
-      .name-text {
-        align-items: flex-end;
-      }
-    }
-
-    .actions {
-      padding-top: 0.5rem;
-
-      &::before {
-        content: none;
-      }
-
-      .btn {
-        flex: 1 1 auto;
-      }
-    }
-  }
 }
 </style>

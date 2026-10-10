@@ -2,7 +2,7 @@
 // Genutzt von "Aktuelle Liste" (eigene offene Positionen) und von den Admin-Ansichten
 // gedruckter Listen (`/api/shop/printed-orders`).
 import { ref } from 'vue'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError, errorMessage } from '@/api/client'
 import type { ShopOrder } from '@/api/types'
 
 type Options = {
@@ -14,9 +14,6 @@ type Options = {
   // Position existiert so nicht mehr (404/409) -> Daten neu laden
   onStale: () => void | Promise<void>
 }
-
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof ApiError ? err.message : fallback
 
 export function useOrderEdit(options: Options) {
   const actionError = ref('')
@@ -41,7 +38,7 @@ export function useOrderEdit(options: Options) {
   const isChanged = (order: ShopOrder) => draftQuantity(order) !== order.quantity
 
   async function handleError(err: unknown, fallback: string) {
-    actionError.value = errorText(err, fallback)
+    actionError.value = errorMessage(err, fallback)
     if (err instanceof ApiError && (err.status === 404 || err.status === 409)) {
       await options.onStale()
     }

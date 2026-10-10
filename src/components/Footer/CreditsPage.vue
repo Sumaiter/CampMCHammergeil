@@ -14,9 +14,12 @@
       <section>
         <h2>2. Schriftarten</h2>
         <p>
-          Metal Mania von Pablo Impallari, lizenziert unter der SIL Open Font License 1.1, eingebunden
-          über
-          <a href="https://fontsource.org/fonts/metal-mania" target="_blank" rel="noopener noreferrer"
+          Metal Mania von Pablo Impallari, lizenziert unter der SIL Open Font License 1.1,
+          eingebunden über
+          <a
+            href="https://fontsource.org/fonts/metal-mania"
+            target="_blank"
+            rel="noopener noreferrer"
             >Fontsource</a
           >.
         </p>

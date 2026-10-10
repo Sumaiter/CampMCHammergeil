@@ -33,6 +33,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T
 }
 
+// Meldung des Servers bei ApiError, sonst der übergebene Ersatztext.
+export const errorMessage = (err: unknown, fallback: string): string =>
+  err instanceof ApiError ? err.message : fallback
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),

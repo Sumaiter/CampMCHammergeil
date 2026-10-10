@@ -2,23 +2,21 @@
 // Summe pro Artikel über alle Personen - entspricht dem, was im PDF steht.
 import { computed } from 'vue'
 import type { ShopOrder } from '@/api/types'
-import { grandTotal, totalsPerItem } from './listData'
-import { formatPrice } from './price'
+import { grandTotal, totalsPerItem } from './orders'
+import { formatPrice, formatPriceOrDash as money } from './price'
 
 const props = defineProps<{ orders: ShopOrder[] }>()
 
 const items = computed(() => totalsPerItem(props.orders))
 const total = computed(() => grandTotal(props.orders))
-
-const money = (cents: number | null) => (cents === null ? '–' : formatPrice(cents))
 </script>
 
 <template>
   <div class="item-totals">
     <h3>Gesamt pro Artikel</h3>
 
-    <div class="table-wrap">
-      <table class="orders">
+    <div class="shop-table-wrap">
+      <table class="shop-table">
         <thead>
           <tr>
             <th>Artikel</th>
@@ -38,7 +36,7 @@ const money = (cents: number | null) => (cents === null ? '–' : formatPrice(ce
       </table>
     </div>
 
-    <p class="total">
+    <p class="shop-total">
       <span>Gesamtsumme</span>
       <strong>{{ formatPrice(total.totalCents) }}</strong>
     </p>
@@ -66,87 +64,15 @@ const money = (cents: number | null) => (cents === null ? '–' : formatPrice(ce
   color: var(--c-text-muted);
 }
 
-.table-wrap {
-  overflow-x: auto;
-}
-
-.orders {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    padding: 0.65rem 0.6rem;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  th {
-    font-size: 0.8rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--c-text-muted);
-  }
-
-  .num {
-    text-align: right;
-    white-space: nowrap;
-  }
-
-  .name {
-    overflow-wrap: anywhere;
-  }
-}
-
-.total {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  font-size: 1.1rem;
+.shop-total {
   padding-top: 0.75rem;
   border-top: 1px solid var(--c-border-strong);
-
-  strong {
-    color: var(--c-accent);
-  }
 }
 
-/* 📱 MOBILE: jede Position als kleine Karte statt Tabellenzeile */
+/* 📱 MOBILE: Zellen oben ausrichten (kein vertikales Zentrieren wie in den Bestelltabellen) */
 @media (max-width: 600px) {
-  .orders {
-    thead {
-      display: none;
-    }
-
-    tr,
-    td {
-      display: block;
-    }
-
-    tr {
-      padding: 0.6rem 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    td {
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: 0.2rem 0;
-      border: 0;
-      text-align: right;
-
-      &::before {
-        content: attr(data-label);
-        color: var(--c-text-muted);
-        text-align: left;
-      }
-    }
-
-    .name {
-      font-weight: 700;
-    }
+  .shop-table td {
+    align-items: normal;
   }
 }
 </style>

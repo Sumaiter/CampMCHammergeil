@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { api, ApiError } from '@/api/client'
-import type { ShopItem, ShopUser } from '@/api/types'
-import { useAuth } from '@/auth/useAuth'
+import { onMounted, ref } from 'vue'
+import { api, errorMessage } from '@/api/client'
+import type { ShopItem } from '@/api/types'
 import { RoutePath } from '@/router/routePath'
 import { formatPrice } from './price'
+import { useShopUsers } from './useShopUsers'
 
-const { user } = useAuth()
-const meId = computed(() => user.value?.id ?? 0)
-
-const items = ref<ShopItem[]>([])
-const users = ref<ShopUser[]>([])
-const usersError = ref('')
 // Empfänger der Bestellung; vorbelegt mit mir selbst, sobald die Benutzer geladen sind
 const recipientId = ref<number | null>(null)
+const { meId, users, usersError, loadUsers, userOptions } = useShopUsers(() => {
+  recipientId.value ??= meId.value
+})
+
+const items = ref<ShopItem[]>([])
 const loading = ref(true)
 const loadError = ref('')
 
@@ -25,41 +24,17 @@ const submitSuccess = ref(false)
 // Empfänger der zuletzt gespeicherten Bestellung, nur wenn es nicht ich selbst war
 const successRecipient = ref('')
 
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof ApiError ? err.message : fallback
-
 async function loadItems() {
   try {
     const data = await api.get<{ items: ShopItem[] }>('/api/shop/items')
     items.value = data.items
     loadError.value = ''
   } catch (err) {
-    loadError.value = errorText(err, 'Artikel konnten nicht geladen werden')
+    loadError.value = errorMessage(err, 'Artikel konnten nicht geladen werden')
   } finally {
     loading.value = false
   }
 }
-
-async function loadUsers() {
-  try {
-    const data = await api.get<{ users: ShopUser[] }>('/api/shop/users')
-    users.value = data.users
-    recipientId.value ??= meId.value
-    usersError.value = ''
-  } catch (err) {
-    usersError.value = errorText(err, 'Benutzer konnten nicht geladen werden')
-  }
-}
-
-// "Mich selbst (name)" zuerst, danach alle anderen in Serverreihenfolge
-const recipientOptions = computed(() => {
-  const me = users.value.find((entry) => entry.id === meId.value)
-  const others = users.value.filter((entry) => entry.id !== meId.value)
-  return [
-    { id: meId.value, label: `Mich selbst (${me?.username ?? user.value?.username ?? ''})` },
-    ...others.map((entry) => ({ id: entry.id, label: entry.username })),
-  ]
-})
 
 function quantityOf(id: number): number {
   const value = Number(quantities.value[id])
@@ -98,7 +73,7 @@ async function submit() {
     successRecipient.value = other?.username ?? ''
     submitSuccess.value = true
   } catch (err) {
-    submitError.value = errorText(err, 'Bestellung konnte nicht gespeichert werden')
+    submitError.value = errorMessage(err, 'Bestellung konnte nicht gespeichert werden')
   } finally {
     submitting.value = false
   }
@@ -114,7 +89,7 @@ onMounted(() => {
   <div class="page-section shopping">
     <h1 class="page-title">Einkaufen</h1>
 
-    <form class="card glass-card" @submit.prevent="submit">
+    <form class="shop-card glass-card" @submit.prevent="submit">
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
       <p v-else-if="!loading && items.length === 0" class="empty">
         Es sind noch keine Artikel verfügbar.
@@ -123,7 +98,7 @@ onMounted(() => {
       <label v-if="items.length > 0 && users.length > 0" class="form-field recipient">
         <span>Für wen?</span>
         <select v-model="recipientId" class="form-input">
-          <option v-for="option in recipientOptions" :key="option.id" :value="option.id">
+          <option v-for="option in userOptions" :key="option.id" :value="option.id">
             {{ option.label }}
           </option>
         </select>
@@ -132,9 +107,9 @@ onMounted(() => {
         {{ usersError }} – du bestellst für dich selbst.
       </p>
 
-      <ul v-if="items.length > 0" class="item-list">
+      <ul v-if="items.length > 0" class="shop-plain-list">
         <li v-for="item in items" :key="item.id" class="item-row">
-          <div class="item-info">
+          <div class="shop-item-info">
             <strong class="item-name">{{ item.name }}</strong>
             <small>{{ formatPrice(item.priceCents) }}</small>
           </div>
@@ -176,26 +151,8 @@ onMounted(() => {
   max-width: 720px;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: clamp(1.25rem, 5vw, 2rem);
-}
-
 .empty {
   color: var(--c-text-muted);
-}
-
-.recipient select option {
-  background: #111a16;
-  color: var(--c-text);
-}
-
-.item-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
 }
 
 .item-row {
@@ -207,21 +164,6 @@ onMounted(() => {
 
   & + & {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-  }
-}
-
-.item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-
-  .item-name {
-    overflow-wrap: anywhere;
-  }
-
-  small {
-    color: var(--c-text-muted);
   }
 }
 

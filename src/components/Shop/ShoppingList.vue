@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { api, ApiError } from '@/api/client'
+import { api, errorMessage } from '@/api/client'
 import type { ShopOrder } from '@/api/types'
 import { useAuth } from '@/auth/useAuth'
 import { RoutePath } from '@/router/routePath'
+import { formatDateTime } from './date'
+import { formatLineTotal, orderHint, ownTotal } from './orders'
 import { formatPrice } from './price'
 import { useOrderEdit } from './useOrderEdit'
-import { formatDateTime, formatLineTotal, orderHint, ownTotal } from './user-orders'
 
 const { user } = useAuth()
 const meId = computed(() => user.value?.id ?? 0)
@@ -14,9 +15,6 @@ const meId = computed(() => user.value?.id ?? 0)
 const orders = ref<ShopOrder[]>([])
 const loading = ref(true)
 const loadError = ref('')
-
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof ApiError ? err.message : fallback
 
 const own = computed(() => ownTotal(orders.value, meId.value))
 const hasOthers = computed(() => orders.value.some((order) => order.userId !== meId.value))
@@ -41,7 +39,7 @@ async function loadOrders() {
     syncDrafts(data.orders)
     loadError.value = ''
   } catch (err) {
-    loadError.value = errorText(err, 'Bestellungen konnten nicht geladen werden')
+    loadError.value = errorMessage(err, 'Bestellungen konnten nicht geladen werden')
   } finally {
     loading.value = false
   }
@@ -54,7 +52,7 @@ onMounted(loadOrders)
   <div class="page-section shopping-list">
     <h1 class="page-title">Aktuelle Liste</h1>
 
-    <section class="card glass-card">
+    <section class="shop-card glass-card">
       <p class="hint">
         Solange die Liste nicht gedruckt wurde, kannst du Mengen ändern oder Positionen löschen.
         Danach findest du sie in der Übersicht.
@@ -68,8 +66,8 @@ onMounted(loadOrders)
       </p>
 
       <template v-if="orders.length > 0">
-        <div class="table-wrap">
-          <table class="orders">
+        <div class="shop-table-wrap">
+          <table class="shop-table">
             <thead>
               <tr>
                 <th>Artikel</th>
@@ -93,7 +91,7 @@ onMounted(loadOrders)
                 <td data-label="Anzahl" class="num">
                   <input
                     v-model="drafts[order.id]"
-                    class="form-input qty-input"
+                    class="form-input shop-qty-input"
                     type="number"
                     inputmode="numeric"
                     min="1"
@@ -132,7 +130,7 @@ onMounted(loadOrders)
 
         <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
 
-        <p class="total">
+        <p class="shop-total">
           <span>Deine Summe</span>
           <strong>{{ formatPrice(own.totalCents) }}</strong>
         </p>
@@ -154,13 +152,6 @@ onMounted(loadOrders)
   max-width: 900px;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: clamp(1.25rem, 5vw, 2rem);
-}
-
 .empty,
 .hint {
   color: var(--c-text-muted);
@@ -169,144 +160,5 @@ onMounted(loadOrders)
 .empty a {
   color: var(--c-accent);
   font-weight: 700;
-}
-
-.table-wrap {
-  overflow-x: auto;
-}
-
-.orders {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    padding: 0.65rem 0.6rem;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  th {
-    font-size: 0.8rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--c-text-muted);
-  }
-
-  .num {
-    text-align: right;
-    white-space: nowrap;
-  }
-
-  .name {
-    overflow-wrap: anywhere;
-  }
-
-  .name-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .order-hint {
-    color: var(--c-accent);
-  }
-
-  .date {
-    color: var(--c-text-muted);
-    white-space: nowrap;
-  }
-
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    border-bottom: 0;
-  }
-}
-
-.qty-input {
-  width: 5.5rem;
-  min-height: 40px;
-  padding: 0.4rem 0.6rem;
-  text-align: right;
-}
-
-.btn-small {
-  min-height: 40px;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.9rem;
-}
-
-.btn-danger {
-  border-color: rgba(255, 138, 138, 0.5);
-  color: #ff8a8a;
-}
-
-.total {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  font-size: 1.1rem;
-
-  strong {
-    color: var(--c-accent);
-  }
-}
-
-/* 📱 MOBILE: jede Bestellung als kleine Karte statt Tabellenzeile */
-@media (max-width: 600px) {
-  .orders {
-    thead {
-      display: none;
-    }
-
-    tr,
-    td {
-      display: block;
-    }
-
-    tr {
-      padding: 0.6rem 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    td {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.2rem 0;
-      border: 0;
-      text-align: right;
-
-      &::before {
-        content: attr(data-label);
-        color: var(--c-text-muted);
-        text-align: left;
-      }
-    }
-
-    .name {
-      font-weight: 700;
-
-      .name-text {
-        align-items: flex-end;
-      }
-    }
-
-    .actions {
-      padding-top: 0.5rem;
-
-      &::before {
-        content: none;
-      }
-
-      .btn {
-        flex: 1 1 auto;
-      }
-    }
-  }
 }
 </style>

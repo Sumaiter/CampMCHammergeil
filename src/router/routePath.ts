@@ -1,4 +1,4 @@
-// Beispiel: routerHelper.goTo(RoutePath.Login)
+// Beispiel: routerHelper.replace(RoutePath.Login)
 export enum RoutePath {
   Home = '/',
   Login = '/login',

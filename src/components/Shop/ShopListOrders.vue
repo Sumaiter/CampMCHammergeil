@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import type { ShopOrder } from '@/api/types'
-import { grandTotal, groupByRecipient, lineTotal, orderedByHint } from './listData'
-import { formatPrice } from './price'
+import { formatLineTotal, grandTotal, groupByRecipient, orderedByHint } from './orders'
+import { formatPrice, formatPriceOrDash } from './price'
 import { useOrderEdit } from './useOrderEdit'
 
 // editable: Admin kann gedruckte Positionen ändern/löschen ("changed" -> Elternseite lädt neu)
@@ -19,13 +19,6 @@ watch(() => props.orders, syncDrafts, { immediate: true })
 
 const groups = computed(() => groupByRecipient(props.orders))
 const total = computed(() => grandTotal(props.orders))
-
-const formatLineTotal = (order: ShopOrder) => {
-  const sum = lineTotal(order)
-  return sum === null ? '–' : formatPrice(sum)
-}
-const formatUnit = (order: ShopOrder) =>
-  order.priceCents === null ? '–' : formatPrice(order.priceCents)
 </script>
 
 <template>
@@ -33,8 +26,8 @@ const formatUnit = (order: ShopOrder) =>
     <section v-for="group in groups" :key="group.userId" class="person">
       <h3>{{ group.username }}</h3>
 
-      <div class="table-wrap">
-        <table class="orders">
+      <div class="shop-table-wrap">
+        <table class="shop-table">
           <thead>
             <tr>
               <th>Artikel</th>
@@ -58,7 +51,7 @@ const formatUnit = (order: ShopOrder) =>
                 <input
                   v-if="editable"
                   v-model="drafts[order.id]"
-                  class="form-input qty-input"
+                  class="form-input shop-qty-input"
                   type="number"
                   inputmode="numeric"
                   min="1"
@@ -69,7 +62,7 @@ const formatUnit = (order: ShopOrder) =>
                 />
                 <template v-else>{{ order.quantity }}</template>
               </td>
-              <td data-label="Preis" class="num">{{ formatUnit(order) }}</td>
+              <td data-label="Preis" class="num">{{ formatPriceOrDash(order.priceCents) }}</td>
               <td data-label="Summe" class="num">{{ formatLineTotal(order) }}</td>
               <td v-if="editable" class="actions">
                 <button
@@ -106,7 +99,7 @@ const formatUnit = (order: ShopOrder) =>
 
     <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
 
-    <p class="total">
+    <p class="shop-total">
       <span>Gesamtsumme</span>
       <strong>{{ formatPrice(total.totalCents) }}</strong>
     </p>
@@ -149,72 +142,11 @@ const formatUnit = (order: ShopOrder) =>
   display: block;
 }
 
-.table-wrap {
-  overflow-x: auto;
-}
-
-.orders {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    padding: 0.65rem 0.6rem;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  th {
-    font-size: 0.8rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--c-text-muted);
-  }
-
-  .num {
-    text-align: right;
-    white-space: nowrap;
-  }
-
-  .name {
-    overflow-wrap: anywhere;
-  }
-
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    border-bottom: 0;
-  }
-}
-
-.qty-input {
-  width: 5.5rem;
-  min-height: 40px;
-  padding: 0.4rem 0.6rem;
-  text-align: right;
-}
-
-.btn-danger {
-  border-color: rgba(255, 138, 138, 0.5);
-  color: #ff8a8a;
-}
-
-.btn-small {
-  min-height: 40px;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.9rem;
-}
-
-.subtotal,
-.total {
+.subtotal {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;
-}
-
-.subtotal {
   padding: 0 0.6rem;
 
   small {
@@ -222,68 +154,15 @@ const formatUnit = (order: ShopOrder) =>
   }
 }
 
-.total {
-  font-size: 1.1rem;
+.shop-total {
   padding-top: 0.75rem;
   border-top: 1px solid var(--c-border-strong);
-
-  strong {
-    color: var(--c-accent);
-  }
 }
 
-/* 📱 MOBILE: jede Position als kleine Karte statt Tabellenzeile */
+/* 📱 MOBILE */
 @media (max-width: 600px) {
   .subtotal {
     padding: 0;
-  }
-
-  .orders {
-    thead {
-      display: none;
-    }
-
-    tr,
-    td {
-      display: block;
-    }
-
-    tr {
-      padding: 0.6rem 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    td {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.2rem 0;
-      border: 0;
-      text-align: right;
-
-      &::before {
-        content: attr(data-label);
-        color: var(--c-text-muted);
-        text-align: left;
-      }
-    }
-
-    .name {
-      font-weight: 700;
-    }
-
-    .actions {
-      padding-top: 0.5rem;
-
-      &::before {
-        content: none;
-      }
-
-      .btn {
-        flex: 1 1 auto;
-      }
-    }
   }
 }
 </style>

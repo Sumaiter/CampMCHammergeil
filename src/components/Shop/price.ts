@@ -21,3 +21,8 @@ export function parsePrice(input: string): ParsedPrice {
   if (!/^\d{1,7}(\.\d{1,2})?$/.test(text)) return { ok: false }
   return { ok: true, cents: Math.round(Number(text) * 100) }
 }
+
+// Wie formatPrice, aber mit Strich statt Text, z. B. in Tabellenzellen: null -> "–"
+export function formatPriceOrDash(cents: number | null): string {
+  return cents === null ? '–' : formatPrice(cents)
+}

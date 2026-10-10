@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError, errorMessage } from '@/api/client'
 import type { ShopListDetail } from '@/api/types'
 import { RoutePath } from '@/router/routePath'
 import ShopListOrders from './ShopListOrders.vue'
-import { formatPrintedDate, formatPrintedTime } from './listData'
+import { formatDateTime } from './date'
 import { downloadListPdf } from './pdf'
 
 const route = useRoute()
@@ -28,11 +28,10 @@ async function loadList() {
     list.value = data.list
     loadError.value = ''
   } catch (err) {
-    if (err instanceof ApiError) {
-      loadError.value = err.status === 404 ? 'Liste nicht gefunden' : err.message
-    } else {
-      loadError.value = 'Liste konnte nicht geladen werden'
-    }
+    loadError.value =
+      err instanceof ApiError && err.status === 404
+        ? 'Liste nicht gefunden'
+        : errorMessage(err, 'Liste konnte nicht geladen werden')
   } finally {
     loading.value = false
   }
@@ -60,13 +59,12 @@ onMounted(loadList)
 
     <h1 class="page-title">{{ list ? `Liste #${list.id}` : 'Liste' }}</h1>
 
-    <section class="card glass-card">
+    <section class="shop-card glass-card">
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
 
       <template v-if="list">
         <p class="meta">
-          Gedruckt am {{ formatPrintedDate(list.printedAt) }},
-          {{ formatPrintedTime(list.printedAt) }} Uhr
+          Gedruckt am {{ formatDateTime(list.printedAt) }} Uhr
           <template v-if="list.printedByName"> von {{ list.printedByName }}</template>
         </p>
 
@@ -96,13 +94,6 @@ onMounted(loadList)
   &:hover {
     text-decoration: underline;
   }
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: clamp(1.25rem, 5vw, 2rem);
 }
 
 .meta {

@@ -3,16 +3,10 @@ import { RoutePath } from '@/router/routePath'
 import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router'
 
 class RouterHelper {
-  // Navigiert zu einer Route (fügt einen neuen History-Eintrag hinzu).
+  // Navigiert zu einer Route und ersetzt den aktuellen History-Eintrag
+  // (kein "Zurück" zur vorherigen Seite möglich, z.B. nach Login).
   // @param path   Ziel-Route aus dem RoutePath-Enum
   // @param query  Optionale Query-Parameter, z.B. { id: '42' }
-  goTo(path: RoutePath, query?: LocationQueryRaw): Promise<unknown> {
-    const location: RouteLocationRaw = query ? { path, query } : path
-    return router.push(location)
-  }
-
-  // Navigiert zu einer Route, ersetzt aber den aktuellen History-Eintrag
-  // (kein "Zurück" zur vorherigen Seite möglich, z.B. nach Login).
   replace(path: RoutePath, query?: LocationQueryRaw): Promise<unknown> {
     const location: RouteLocationRaw = query ? { path, query } : path
     return router.replace(location)
@@ -20,6 +14,6 @@ class RouterHelper {
 }
 
 // Singleton-Instanz – einfach importieren und nutzen:
-// import { routerHelper, RoutePath } from '@/router/routerHelper'
-// routerHelper.goTo(RoutePath.Login)
+// import { routerHelper } from '@/router/routerHelper'
+// routerHelper.replace(RoutePath.Login)
 export const routerHelper = new RouterHelper()

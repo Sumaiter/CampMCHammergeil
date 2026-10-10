@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api, ApiError } from '@/api/client'
+import { api, errorMessage } from '@/api/client'
 import type { ShopItem } from '@/api/types'
 import { centsToInput, formatPrice, parsePrice } from './price'
 
@@ -22,9 +22,6 @@ const editPrice = ref('')
 const editError = ref('')
 const saving = ref(false)
 
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof ApiError ? err.message : fallback
-
 const sortItems = (list: ShopItem[]) =>
   [...list].sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }))
 
@@ -34,7 +31,7 @@ async function loadItems() {
     items.value = sortItems(data.items)
     listError.value = ''
   } catch (err) {
-    listError.value = errorText(err, 'Artikel konnten nicht geladen werden')
+    listError.value = errorMessage(err, 'Artikel konnten nicht geladen werden')
   } finally {
     loading.value = false
   }
@@ -59,7 +56,7 @@ async function createItem() {
     newName.value = ''
     newPrice.value = ''
   } catch (err) {
-    createError.value = errorText(err, 'Artikel konnte nicht hinzugefügt werden')
+    createError.value = errorMessage(err, 'Artikel konnte nicht hinzugefügt werden')
   } finally {
     creating.value = false
   }
@@ -93,7 +90,7 @@ async function saveEdit(item: ShopItem) {
     items.value = sortItems(items.value.map((entry) => (entry.id === item.id ? data.item : entry)))
     cancelEdit()
   } catch (err) {
-    editError.value = errorText(err, 'Artikel konnte nicht gespeichert werden')
+    editError.value = errorMessage(err, 'Artikel konnte nicht gespeichert werden')
   } finally {
     saving.value = false
   }
@@ -106,7 +103,7 @@ onMounted(loadItems)
   <div class="page-section shop-admin">
     <h1 class="page-title">Shopliste</h1>
 
-    <form class="card glass-card" @submit.prevent="createItem">
+    <form class="shop-card glass-card" @submit.prevent="createItem">
       <h2>Neuen Artikel hinzufügen</h2>
 
       <div class="create-fields">
@@ -133,13 +130,13 @@ onMounted(loadItems)
       <button type="submit" class="btn" :disabled="creating">Hinzufügen</button>
     </form>
 
-    <section class="card glass-card">
+    <section class="shop-card glass-card">
       <h2>Artikel</h2>
 
       <p v-if="listError" class="form-error" role="alert">{{ listError }}</p>
       <p v-else-if="!loading && items.length === 0" class="empty">Noch keine Artikel angelegt.</p>
 
-      <ul class="item-list">
+      <ul class="shop-plain-list">
         <li v-for="item in items" :key="item.id" class="item-row">
           <form
             v-if="editId === item.id"
@@ -181,7 +178,7 @@ onMounted(loadItems)
           </form>
 
           <template v-else>
-            <div class="item-info">
+            <div class="shop-item-info">
               <strong class="item-name">{{ item.name }}</strong>
               <small>{{ formatPrice(item.priceCents) }}</small>
             </div>
@@ -205,12 +202,7 @@ onMounted(loadItems)
   max-width: 720px;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: clamp(1.25rem, 5vw, 2rem);
-
+.shop-card {
   & + & {
     margin-top: 1.25rem;
   }
@@ -232,12 +224,6 @@ onMounted(loadItems)
   color: var(--c-text-muted);
 }
 
-.item-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
 .item-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -254,21 +240,6 @@ onMounted(loadItems)
   }
 }
 
-.item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-
-  .item-name {
-    overflow-wrap: anywhere;
-  }
-
-  small {
-    color: var(--c-text-muted);
-  }
-}
-
 .edit-form {
   display: flex;
   flex-direction: column;
@@ -279,12 +250,6 @@ onMounted(loadItems)
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-}
-
-.btn-small {
-  min-height: 40px;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.9rem;
 }
 
 /* 📱 MOBILE: Felder und Aktionen untereinander */

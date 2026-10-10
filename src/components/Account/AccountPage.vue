@@ -206,11 +206,6 @@ async function onLogout() {
   }
 }
 
-.btn-danger {
-  border-color: rgba(255, 138, 138, 0.5);
-  color: #ff8a8a;
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;

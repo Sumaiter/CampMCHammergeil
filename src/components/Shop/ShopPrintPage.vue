@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { api, ApiError } from '@/api/client'
+import { api, errorMessage } from '@/api/client'
 import type { ShopListDetail, ShopOrder } from '@/api/types'
 import { shopListDetailPath } from '@/router/routePath'
 import ShopItemTotals from './ShopItemTotals.vue'
@@ -14,9 +14,6 @@ const printing = ref(false)
 const printError = ref('')
 const printedList = ref<ShopListDetail | null>(null)
 
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof ApiError ? err.message : fallback
-
 const empty = computed(() => !loading.value && !loadError.value && orders.value.length === 0)
 
 async function loadOrders() {
@@ -25,7 +22,7 @@ async function loadOrders() {
     orders.value = data.orders
     loadError.value = ''
   } catch (err) {
-    loadError.value = errorText(err, 'Offene Bestellungen konnten nicht geladen werden')
+    loadError.value = errorMessage(err, 'Offene Bestellungen konnten nicht geladen werden')
   } finally {
     loading.value = false
   }
@@ -49,7 +46,7 @@ async function printList() {
         'Die Liste wurde gedruckt, das PDF konnte aber nicht erstellt werden. Du kannst es in der Detailansicht erneut herunterladen.'
     }
   } catch (err) {
-    printError.value = errorText(err, 'Liste konnte nicht gedruckt werden')
+    printError.value = errorMessage(err, 'Liste konnte nicht gedruckt werden')
   } finally {
     printing.value = false
     await loadOrders()
@@ -63,7 +60,7 @@ onMounted(loadOrders)
   <div class="page-section shop-print">
     <h1 class="page-title">Liste drucken</h1>
 
-    <section class="card glass-card">
+    <section class="shop-card glass-card">
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
       <p v-else-if="empty" class="empty">Keine offenen Bestellungen.</p>
 
@@ -90,13 +87,6 @@ onMounted(loadOrders)
 <style scoped lang="scss">
 .shop-print {
   max-width: 900px;
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: clamp(1.25rem, 5vw, 2rem);
 }
 
 .empty {

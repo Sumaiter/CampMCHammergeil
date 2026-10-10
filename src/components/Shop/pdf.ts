@@ -1,15 +1,18 @@
 // PDF der Einkaufsliste (A4 hoch): Summe pro Artikel über alle Personen.
 // jsPDF und jspdf-autotable werden erst beim Klick geladen, damit sie nicht im Haupt-Bundle landen.
 import type { ShopListDetail } from '@/api/types'
-import { grandTotal, parseServerDate, pdfFileName, totalsPerItem } from './listData'
-import { formatPrice } from './price'
+import { formatDateTime, parseServerDate } from './date'
+import { grandTotal, totalsPerItem } from './orders'
+import { formatPriceOrDash as money } from './price'
 
-const money = (cents: number | null) => (cents === null ? '–' : formatPrice(cents))
+const pad = (n: number) => String(n).padStart(2, '0')
 
-const printedLabel = (printedAt: string) =>
-  new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    parseServerDate(printedAt),
-  )
+// einkaufsliste-YYYY-MM-DD-HHMM-<id>.pdf (lokale Zeit)
+export function pdfFileName(id: number, printedAt: string): string {
+  const d = parseServerDate(printedAt)
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return `einkaufsliste-${date}-${pad(d.getHours())}${pad(d.getMinutes())}-${id}.pdf`
+}
 
 export async function downloadListPdf(list: ShopListDetail): Promise<void> {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
@@ -28,7 +31,7 @@ export async function downloadListPdf(list: ShopListDetail): Promise<void> {
   y += 13
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
-  doc.text(`Liste #${list.id} – gedruckt am ${printedLabel(list.printedAt)} Uhr`, margin, y)
+  doc.text(`Liste #${list.id} – gedruckt am ${formatDateTime(list.printedAt)} Uhr`, margin, y)
   y += 8
 
   // Gesamt pro Artikel

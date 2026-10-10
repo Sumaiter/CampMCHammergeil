@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api, ApiError } from '@/api/client'
+import { api, errorMessage } from '@/api/client'
 import type { ShopList } from '@/api/types'
 import { shopListDetailPath } from '@/router/routePath'
-import { formatPrintedDate, formatPrintedTime } from './listData'
+import { formatDateTime } from './date'
 import { formatPrice } from './price'
 
 const lists = ref<ShopList[]>([])
@@ -16,7 +16,7 @@ async function loadLists() {
     lists.value = data.lists
     loadError.value = ''
   } catch (err) {
-    loadError.value = err instanceof ApiError ? err.message : 'Listen konnten nicht geladen werden'
+    loadError.value = errorMessage(err, 'Listen konnten nicht geladen werden')
   } finally {
     loading.value = false
   }
@@ -29,17 +29,16 @@ onMounted(loadLists)
   <div class="page-section shop-lists">
     <h1 class="page-title">Alte Listen</h1>
 
-    <section class="card glass-card">
+    <section class="shop-card glass-card">
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
       <p v-else-if="!loading && lists.length === 0" class="empty">Noch keine Liste gedruckt.</p>
 
-      <ul class="list-list">
+      <ul class="shop-plain-list">
         <li v-for="list in lists" :key="list.id">
           <router-link :to="shopListDetailPath(list.id)" class="list-row">
-            <div class="list-info">
+            <div class="shop-item-info">
               <strong class="list-title">
-                Liste #{{ list.id }} – {{ formatPrintedDate(list.printedAt) }},
-                {{ formatPrintedTime(list.printedAt) }} Uhr
+                Liste #{{ list.id }} – {{ formatDateTime(list.printedAt) }} Uhr
               </strong>
               <small>
                 <template v-if="list.printedByName">
@@ -64,25 +63,12 @@ onMounted(loadLists)
   max-width: 720px;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: clamp(1.25rem, 5vw, 2rem);
-}
-
 .empty {
   color: var(--c-text-muted);
 }
 
-.list-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-
-  li + li {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-  }
+.shop-plain-list li + li {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .list-row {
@@ -99,21 +85,17 @@ onMounted(loadLists)
   }
 }
 
-.list-info,
 .list-sum {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
   min-width: 0;
+  align-items: flex-end;
+  text-align: right;
 
   small {
     color: var(--c-text-muted);
   }
-}
-
-.list-sum {
-  align-items: flex-end;
-  text-align: right;
 
   strong {
     color: var(--c-accent);

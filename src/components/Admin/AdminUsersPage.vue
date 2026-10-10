@@ -319,11 +319,6 @@ onMounted(loadUsers)
   font-size: 0.9rem;
 }
 
-.btn-danger {
-  border-color: rgba(255, 138, 138, 0.5);
-  color: #ff8a8a;
-}
-
 /* 📱 MOBILE: Felder und Aktionen untereinander */
 @media (max-width: 600px) {
   .create-fields {
