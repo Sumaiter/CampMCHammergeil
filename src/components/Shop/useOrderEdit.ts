@@ -17,11 +17,11 @@ type Options = {
 
 export function useOrderEdit(options: Options) {
   const actionError = ref('')
-  // Zeile, die gerade gespeichert oder gelöscht wird
+  // Zeile, die gerade gelöscht wird
   const busyId = ref<number | null>(null)
-  // Eingaben im Mengenfeld pro Bestell-ID (vorbelegt mit der gespeicherten Menge)
   // Sammel-Speichern läuft
   const saving = ref(false)
+  // Eingaben im Mengenfeld pro Bestell-ID (vorbelegt mit der gespeicherten Menge)
   const drafts = ref<Record<number, number | string | null>>({})
 
   function syncDrafts(orders: ShopOrder[]) {
@@ -43,28 +43,6 @@ export function useOrderEdit(options: Options) {
     actionError.value = errorMessage(err, fallback)
     if (err instanceof ApiError && (err.status === 404 || err.status === 409)) {
       await options.onStale()
-    }
-  }
-
-  async function save(order: ShopOrder) {
-    actionError.value = ''
-    const quantity = draftQuantity(order)
-    if (quantity === null) {
-      actionError.value = 'Die Anzahl muss zwischen 1 und 999 liegen.'
-      return
-    }
-
-    busyId.value = order.id
-    try {
-      const data = await api.put<{ order: ShopOrder }>(`${options.basePath}/${order.id}`, {
-        quantity,
-      })
-      drafts.value[order.id] = data.order.quantity
-      await options.onSaved(data.order)
-    } catch (err) {
-      await handleError(err, 'Anzahl konnte nicht gespeichert werden')
-    } finally {
-      busyId.value = null
     }
   }
 
@@ -95,7 +73,8 @@ export function useOrderEdit(options: Options) {
           failure ??= result.reason
         }
       }
-      if (failure !== undefined) await handleError(failure, 'Anzahl konnte nicht gespeichert werden')
+      if (failure !== undefined)
+        await handleError(failure, 'Anzahl konnte nicht gespeichert werden')
       return failure === undefined
     } finally {
       saving.value = false
@@ -118,5 +97,15 @@ export function useOrderEdit(options: Options) {
     }
   }
 
-  return { actionError, busyId, saving, drafts, syncDrafts, draftQuantity, isChanged, save, saveChanged, remove }
+  return {
+    actionError,
+    busyId,
+    saving,
+    drafts,
+    syncDrafts,
+    draftQuantity,
+    isChanged,
+    saveChanged,
+    remove,
+  }
 }

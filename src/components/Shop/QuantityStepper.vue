@@ -2,11 +2,15 @@
 import { ref, watch } from 'vue'
 
 // Mengenfeld mit − und + (touch-freundlich); Tippen einer Zahl funktioniert ebenfalls
-const props = withDefaults(defineProps<{ min?: number; max?: number; label?: string }>(), {
-  min: 0,
-  max: Number.POSITIVE_INFINITY,
-  label: 'Anzahl',
-})
+const props = withDefaults(
+  defineProps<{ min?: number; max?: number; label?: string; disabled?: boolean }>(),
+  {
+    min: 0,
+    max: Number.POSITIVE_INFINITY,
+    label: 'Anzahl',
+    disabled: false,
+  },
+)
 const model = defineModel<number>({ default: 0 })
 
 function clamp(value: number): number {
@@ -47,7 +51,7 @@ function onBlur() {
       type="button"
       class="stepper-btn"
       :aria-label="`${label} verringern`"
-      :disabled="model <= min"
+      :disabled="disabled || model <= min"
       @click="set(model - 1)"
     >
       −
@@ -60,6 +64,7 @@ function onBlur() {
       autocomplete="off"
       :aria-label="label"
       :value="text"
+      :disabled="disabled"
       @input="onInput"
       @blur="onBlur"
     />
@@ -67,7 +72,7 @@ function onBlur() {
       type="button"
       class="stepper-btn"
       :aria-label="`${label} erhöhen`"
-      :disabled="model >= max"
+      :disabled="disabled || model >= max"
       @click="set(model + 1)"
     >
       +

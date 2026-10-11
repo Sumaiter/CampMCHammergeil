@@ -1,21 +1,37 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { ShopOrder } from '@/api/types'
 import { formatLineTotal, grandTotal, groupByRecipient, orderedByHint } from './orders'
 import { formatPrice, formatPriceOrDash } from './price'
+import QuantityStepper from './QuantityStepper.vue'
 import { useOrderEdit } from './useOrderEdit'
 
 // editable: Admin kann gedruckte Positionen ändern/löschen ("changed" -> Elternseite lädt neu)
 const props = defineProps<{ orders: ShopOrder[]; editable?: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
 
-const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = useOrderEdit({
-  basePath: '/api/shop/printed-orders',
-  onSaved: () => emit('changed'),
-  onRemoved: () => emit('changed'),
-  onStale: () => emit('changed'),
-})
+// Nach dem Sammel-Speichern wird einmal neu geladen (siehe saveAll), nicht pro Position
+const { actionError, busyId, saving, drafts, syncDrafts, isChanged, saveChanged, remove } =
+  useOrderEdit({
+    basePath: '/api/shop/printed-orders',
+    onSaved: () => {},
+    onRemoved: () => emit('changed'),
+    onStale: () => emit('changed'),
+  })
 watch(() => props.orders, syncDrafts, { immediate: true })
+
+function draftOf(order: ShopOrder): number {
+  return Number(drafts.value[order.id] ?? order.quantity)
+}
+
+const hasChanges = computed(() => props.orders.some(isChanged))
+const saveSuccess = ref(false)
+
+async function saveAll() {
+  saveSuccess.value = false
+  saveSuccess.value = await saveChanged(props.orders)
+  emit('changed')
+}
 
 const groups = computed(() => groupByRecipient(props.orders))
 const total = computed(() => grandTotal(props.orders))
@@ -48,17 +64,14 @@ const total = computed(() => grandTotal(props.orders))
                 </span>
               </td>
               <td data-label="Menge" class="num">
-                <input
+                <QuantityStepper
                   v-if="editable"
-                  v-model="drafts[order.id]"
-                  class="form-input shop-qty-input"
-                  type="number"
-                  inputmode="numeric"
-                  min="1"
-                  max="999"
-                  step="1"
-                  :aria-label="`Menge für ${order.itemName}`"
-                  :disabled="busyId === order.id"
+                  :model-value="draftOf(order)"
+                  :min="1"
+                  :max="999"
+                  :label="`Menge für ${order.itemName}`"
+                  :disabled="busyId === order.id || saving"
+                  @update:model-value="drafts[order.id] = $event"
                 />
                 <template v-else>{{ order.quantity }}</template>
               </td>
@@ -66,18 +79,9 @@ const total = computed(() => grandTotal(props.orders))
               <td data-label="Summe" class="num">{{ formatLineTotal(order) }}</td>
               <td v-if="editable" class="actions">
                 <button
-                  v-if="isChanged(order)"
-                  type="button"
-                  class="btn btn-small"
-                  :disabled="busyId === order.id"
-                  @click="save(order)"
-                >
-                  Speichern
-                </button>
-                <button
                   type="button"
                   class="btn btn-secondary btn-small btn-danger"
-                  :disabled="busyId === order.id"
+                  :disabled="busyId === order.id || saving"
                   @click="remove(order)"
                 >
                   Löschen
@@ -98,6 +102,15 @@ const total = computed(() => grandTotal(props.orders))
     </section>
 
     <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
+    <p v-if="saveSuccess && !hasChanges" class="form-success" role="status">
+      Änderungen gespeichert.
+    </p>
+
+    <div v-if="editable">
+      <button type="button" class="btn" :disabled="!hasChanges || saving" @click="saveAll">
+        Speichern
+      </button>
+    </div>
 
     <p class="shop-total">
       <span>Gesamtsumme</span>

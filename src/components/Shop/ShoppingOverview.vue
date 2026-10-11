@@ -7,6 +7,7 @@ import { RoutePath } from '@/router/routePath'
 import { formatDateTime, formatListTitle } from './date'
 import { formatLineTotal, groupByList, orderHint, ownTotal } from './orders'
 import { formatPrice, paypalPayUrl } from './price'
+import QuantityStepper from './QuantityStepper.vue'
 import { useOrderEdit } from './useOrderEdit'
 import { useShopUsers } from './useShopUsers'
 
@@ -60,13 +61,28 @@ async function reloadAfterEdit() {
   if (showBalances.value) await loadBalances()
 }
 
-const { actionError, busyId, drafts, syncDrafts, isChanged, save, remove } = useOrderEdit({
-  basePath: '/api/shop/printed-orders',
-  onSaved: reloadAfterEdit,
-  onRemoved: reloadAfterEdit,
-  onStale: reloadAfterEdit,
-})
+// Nach dem Sammel-Speichern wird einmal neu geladen (siehe saveAll), nicht pro Position
+const { actionError, busyId, saving, drafts, syncDrafts, isChanged, saveChanged, remove } =
+  useOrderEdit({
+    basePath: '/api/shop/printed-orders',
+    onSaved: () => {},
+    onRemoved: reloadAfterEdit,
+    onStale: reloadAfterEdit,
+  })
 watch(orders, syncDrafts, { immediate: true })
+
+function draftOf(order: ShopOrder): number {
+  return Number(drafts.value[order.id] ?? order.quantity)
+}
+
+const hasChanges = computed(() => orders.value.some(isChanged))
+const saveSuccess = ref(false)
+
+async function saveAll() {
+  saveSuccess.value = false
+  saveSuccess.value = await saveChanged(orders.value)
+  await reloadAfterEdit()
+}
 
 async function loadBalances() {
   balancesLoading.value = true
@@ -221,17 +237,14 @@ onMounted(() => {
                   </span>
                 </td>
                 <td data-label="Anzahl" class="num">
-                  <input
+                  <QuantityStepper
                     v-if="isAdmin"
-                    v-model="drafts[order.id]"
-                    class="form-input shop-qty-input"
-                    type="number"
-                    inputmode="numeric"
-                    min="1"
-                    max="999"
-                    step="1"
-                    :aria-label="`Anzahl für ${order.itemName}`"
-                    :disabled="busyId === order.id"
+                    :model-value="draftOf(order)"
+                    :min="1"
+                    :max="999"
+                    :label="`Anzahl für ${order.itemName}`"
+                    :disabled="busyId === order.id || saving"
+                    @update:model-value="drafts[order.id] = $event"
                   />
                   <template v-else>{{ order.quantity }}</template>
                 </td>
@@ -240,18 +253,9 @@ onMounted(() => {
                 <td data-label="Bestellt" class="date">{{ formatDateTime(order.createdAt) }}</td>
                 <td v-if="isAdmin" class="actions">
                   <button
-                    v-if="isChanged(order)"
-                    type="button"
-                    class="btn btn-small"
-                    :disabled="busyId === order.id"
-                    @click="save(order)"
-                  >
-                    Speichern
-                  </button>
-                  <button
                     type="button"
                     class="btn btn-secondary btn-small btn-danger"
-                    :disabled="busyId === order.id"
+                    :disabled="busyId === order.id || saving"
                     @click="remove(order)"
                   >
                     Löschen
@@ -262,12 +266,25 @@ onMounted(() => {
           </table>
         </div>
 
-        <p v-if="isAdmin && actionError" class="form-error" role="alert">{{ actionError }}</p>
-
         <p class="shop-total">
           <span>Summe dieser Liste</span>
           <strong>{{ formatPrice(ownTotal(group.orders, viewed).totalCents) }}</strong>
         </p>
+      </section>
+
+      <!-- Admin: ein Speichern-Button für alle Listen; bei offenen Änderungen beim Scrollen sichtbar -->
+      <section
+        v-if="isAdmin"
+        class="shop-card glass-card save-bar"
+        :class="{ pending: hasChanges || saving }"
+      >
+        <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
+        <p v-if="saveSuccess && !hasChanges" class="form-success" role="status">
+          Änderungen gespeichert.
+        </p>
+        <button type="button" class="btn" :disabled="!hasChanges || saving" @click="saveAll">
+          Speichern
+        </button>
       </section>
     </template>
   </div>
@@ -303,6 +320,18 @@ onMounted(() => {
 
 .btn-small {
   align-self: flex-start;
+}
+
+.save-bar {
+  .btn {
+    align-self: flex-start;
+  }
+
+  &.pending {
+    position: sticky;
+    bottom: 1rem;
+    z-index: 1;
+  }
 }
 
 .paypal-link {
