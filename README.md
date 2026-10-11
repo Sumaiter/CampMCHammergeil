@@ -63,6 +63,9 @@ npm run create-admin -- <name> --remote  # Admin in der Produktions-D1 anlegen
 npm run reset-shop-data                # Bestellungen + Listen in der lokalen D1 löschen (--remote: Produktion)
 npm run db:migrate:remote              # Migrationen auf die Produktions-D1 anwenden
 npm run deploy                         # Build + wrangler deploy
+npm run release                        # in der Haupt-Arbeitskopie: Remote-Migrationen + deploy
 ```
+
+In Paseo steht `release` als Skript „deploy“ zur Verfügung (`paseo.json`).
 
 Nach Änderungen an `wrangler.jsonc` die Typen neu erzeugen: `npm run cf-typegen`.
