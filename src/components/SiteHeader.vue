@@ -15,9 +15,7 @@ const { user } = useAuth()
       :aria-label="user ? 'Konto' : 'Login'"
     >
       <span class="satellite-icon" aria-hidden="true">🛰️</span>
-      <span class="satellite-label" :title="user?.username">{{
-        user ? user.username : 'Login'
-      }}</span>
+      <span class="satellite-label">{{ user ? user.username : 'Login' }}</span>
     </router-link>
 
     <!-- 🌍 PLANET -->
@@ -71,10 +69,10 @@ const { user } = useAuth()
   }
 
   .satellite-label {
-    max-width: min(16rem, 45vw); // lange Namen erst am Rand kürzen, wächst nach links
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: min(16rem, 45vw); // lange Namen umbrechen statt abschneiden
+    overflow-wrap: anywhere;
+    text-align: center;
+    line-height: 1.3;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.18em;
