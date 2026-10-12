@@ -190,8 +190,8 @@ Erwartet: 3 passed.
 Run: `npm run build`
 Erwartet: Erfolg. Die Ausgabe enthält Client-Assets und das Worker-Bundle unter `dist/`.
 
-Run: `npm run dev`, dann `curl -s http://localhost:5173/api/gibtsnicht`
-Erwartet: `{"error":"Nicht gefunden"}`. `http://localhost:5173/shop` liefert HTML.
+Run: `npm run dev`, dann `curl -s http://localhost:5180/api/gibtsnicht`
+Erwartet: `{"error":"Nicht gefunden"}`. `http://localhost:5180/shop` liefert HTML.
 
 - [ ] **Step 8: Commit**
 
