@@ -79,9 +79,9 @@ const SURFACE_SHADER = `
 uniform float uPixel;
 
 // Kraterlagen: x = Maßstab, y = Versatz, z = Dichte (Anteil der Zellen mit Krater)
-const vec3 BIG_CRATERS = vec3(2.0, 0.0, 0.3);
-const vec3 MID_CRATERS = vec3(4.6, 13.1, 0.6);
-const vec3 SMALL_CRATERS = vec3(9.5, 41.7, 0.7);
+const vec3 BIG_CRATERS = vec3(2.0, 0.0, 0.5);
+const vec3 MID_CRATERS = vec3(4.6, 13.1, 1.0);
+const vec3 SMALL_CRATERS = vec3(9.5, 41.7, 1.0);
 const vec3 NO_CRATERS = vec3(0.0);
 
 // Krater einer Zelle: xyz = Mittelpunkt, w = Radius (beides in Lagen-Koordinaten), w < 0 = keiner
@@ -95,7 +95,7 @@ vec4 craterAt(vec3 cellId, float density) {
 // xyz = Richtung zur Kreismitte, w = Radius (< 0, wenn der Krater die Oberfläche verfehlt)
 vec4 craterFootprint(vec4 crater, vec3 layer) {
   vec3 center = (crater.xyz - layer.y) / layer.x;
-  float reach = 1.4 * crater.w / layer.x;
+  float reach = 1.15 * crater.w / layer.x;
   float offset = length(center) - 1.0;
   if (reach <= abs(offset)) return vec4(-1.0);
   return vec4(normalize(center), sqrt(reach * reach - offset * offset));
