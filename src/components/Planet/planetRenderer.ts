@@ -78,24 +78,70 @@ vec2 planetCoord() {
 const SURFACE_SHADER = `
 uniform float uPixel;
 
-// Eine Lage zufällig verteilter Krater (Schüssel + erhöhter Rand), nahtlos auf der Kugel
-float craterLayer(vec3 p, float density) {
+// Kraterlagen: x = Maßstab, y = Versatz, z = Dichte (Anteil der Zellen mit Krater)
+const vec3 BIG_CRATERS = vec3(2.0, 0.0, 0.5);
+const vec3 MID_CRATERS = vec3(4.6, 13.1, 1.0);
+const vec3 SMALL_CRATERS = vec3(9.5, 41.7, 1.0);
+const vec3 NO_CRATERS = vec3(0.0);
+
+// Krater einer Zelle: xyz = Mittelpunkt, w = Radius (beides in Lagen-Koordinaten), w < 0 = keiner
+vec4 craterAt(vec3 cellId, float density) {
+  vec3 rnd = hash33(cellId);
+  if (rnd.z > density) return vec4(-1.0);
+  return vec4(cellId + 0.2 + 0.6 * hash33(cellId + 19.7), 0.22 + 0.28 * rnd.x);
+}
+
+// Sichtbarer Kreis eines Kraters auf der Oberfläche, Rand eingerechnet (Planeten-Koordinaten):
+// xyz = Richtung zur Kreismitte, w = Radius (< 0, wenn der Krater die Oberfläche verfehlt)
+vec4 craterFootprint(vec4 crater, vec3 layer) {
+  vec3 center = (crater.xyz - layer.y) / layer.x;
+  float reach = 1.15 * crater.w / layer.x;
+  float offset = length(center) - 1.0;
+  if (reach <= abs(offset)) return vec4(-1.0);
+  return vec4(normalize(center), sqrt(reach * reach - offset * offset));
+}
+
+// Ob in einer Lage ein Krater mit Radius > minRadius den sichtbaren Kreis footprint berührt
+bool touchesCrater(vec4 footprint, float minRadius, vec3 layer) {
+  vec3 i = floor(footprint.xyz * layer.x + layer.y);
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++) {
+      for (int z = -1; z <= 1; z++) {
+        vec4 other = craterAt(i + vec3(float(x), float(y), float(z)), layer.z);
+        if (other.w <= minRadius) continue;
+        vec4 otherFootprint = craterFootprint(other, layer);
+        if (otherFootprint.w < 0.0) continue;
+        if (length(footprint.xyz - otherFootprint.xyz) < footprint.w + otherFootprint.w) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Eine Lage zufällig verteilter Krater (Schüssel + erhöhter Rand), nahtlos auf der Kugel.
+// Krater, die einen größeren berühren würden – aus dieser Lage oder den gröberen Lagen
+// coarse1/coarse2 –, entfallen, damit keine zwei Krater ineinander liegen.
+float craterLayer(vec3 n, vec3 layer, vec3 coarse1, vec3 coarse2) {
+  vec3 p = n * layer.x + layer.y;
   vec3 i = floor(p);
-  vec3 f = fract(p);
   float h = 0.0;
   for (int x = -1; x <= 1; x++) {
     for (int y = -1; y <= 1; y++) {
       for (int z = -1; z <= 1; z++) {
-        vec3 cell = vec3(float(x), float(y), float(z));
-        vec3 rnd = hash33(i + cell);
-        if (rnd.z > density) continue;
-        vec3 center = cell + 0.2 + 0.6 * hash33(i + cell + 19.7);
-        float radius = 0.22 + 0.28 * rnd.x;
-        float d = length(f - center) / radius;
+        vec4 crater = craterAt(i + vec3(float(x), float(y), float(z)), layer.z);
+        if (crater.w < 0.0) continue;
+        float d = length(p - crater.xyz) / crater.w;
+        if (d > 2.0) continue;
+        vec4 footprint = craterFootprint(crater, layer);
+        if (footprint.w > 0.0) {
+          if (touchesCrater(footprint, crater.w, layer)) continue;
+          if (coarse1.x > 0.0 && touchesCrater(footprint, 0.0, coarse1)) continue;
+          if (coarse2.x > 0.0 && touchesCrater(footprint, 0.0, coarse2)) continue;
+        }
         float bowl = d < 1.0 ? d * d - 1.0 : 0.0;
         float e = (d - 1.0) / 0.3;
         float rim = 0.22 * exp(-e * e);
-        h += (bowl + rim) * radius;
+        h += (bowl + rim) * crater.w;
       }
     }
   }
@@ -103,9 +149,9 @@ float craterLayer(vec3 p, float density) {
 }
 
 float surfaceHeight(vec3 n) {
-  float h = craterLayer(n * 2.0, 0.3) * 0.5;
-  h += craterLayer(n * 4.6 + 13.1, 0.4) * 0.22;
-  h += craterLayer(n * 9.5 + 41.7, 0.3) * 0.1;
+  float h = craterLayer(n, BIG_CRATERS, NO_CRATERS, NO_CRATERS) * 0.5;
+  h += craterLayer(n, MID_CRATERS, BIG_CRATERS, NO_CRATERS) * 0.22;
+  h += craterLayer(n, SMALL_CRATERS, BIG_CRATERS, MID_CRATERS) * 0.1;
   // felsige, raue Struktur
   h += (fbm(n * 6.0) - 0.5) * 0.09;
   h += (fbm(n * 18.0 + 3.0) - 0.5) * 0.05;
