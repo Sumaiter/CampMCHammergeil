@@ -4,6 +4,12 @@ import PlanetCanvas from './Planet/PlanetCanvas.vue'
 import { useAuth } from '@/auth/useAuth'
 
 const { user } = useAuth()
+
+// Standard wäre alle 2 s ein Glitch – so nur kurz (~0,5 s) alle 8 s
+const glitchOptions = {
+  timing: { duration: 8000 },
+  glitchTimeSpan: { start: 0.9, end: 0.96 },
+}
 </script>
 
 <template>
@@ -23,7 +29,7 @@ const { user } = useAuth()
       <PlanetCanvas />
 
       <span class="text-layer">
-        <GlitchedElement>
+        <GlitchedElement :options="glitchOptions">
           <span class="metal">
             Camp MC <br class="mobile-break" />
             Hammergeil
