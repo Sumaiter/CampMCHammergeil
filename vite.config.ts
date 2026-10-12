@@ -13,6 +13,11 @@ export default defineConfig({
     // Startet den Worker (API + D1) im selben Dev-Server und baut ihn für `wrangler deploy`
     cloudflare(),
   ],
+  // 5173 ist durch ein anderes Projekt belegt
+  server: {
+    port: 5180,
+    strictPort: true,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

@@ -55,7 +55,8 @@ Artikel bleiben bestehen. Dasselbe per Kommandozeile: `npm run reset-shop-data -
 Alle Befehle:
 
 ```sh
-npm run dev                            # App + API + lokale D1 (Vite + @cloudflare/vite-plugin)
+npm run dev                            # App + API + lokale D1 auf http://localhost:5180 (Vite + @cloudflare/vite-plugin)
+npm run dev:stop                       # Dev-Server beenden (alle Arbeitskopien, nur Windows)
 npm test                               # Worker- und Frontend-Tests (Vitest)
 npm run db:migrate:local               # Migrationen auf die lokale D1 anwenden
 npm run create-admin -- <name>         # Admin in der lokalen D1 anlegen
@@ -66,6 +67,6 @@ npm run deploy                         # Build + wrangler deploy
 npm run release                        # in der Haupt-Arbeitskopie: Remote-Migrationen + deploy
 ```
 
-In Paseo steht `release` als Skript „deploy“ zur Verfügung (`paseo.json`).
+In Paseo stehen `dev` (Dev-Server als Service), `dev:stop` und `release` (als „deploy“) zur Verfügung (`paseo.json`).
 
 Nach Änderungen an `wrangler.jsonc` die Typen neu erzeugen: `npm run cf-typegen`.

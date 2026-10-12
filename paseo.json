@@ -1,5 +1,7 @@
 {
   "scripts": {
+    "dev": { "type": "service", "command": "npm run dev", "port": 5180 },
+    "dev:stop": { "command": "npm run dev:stop" },
     "deploy": { "command": "npm run release" }
   }
 }
