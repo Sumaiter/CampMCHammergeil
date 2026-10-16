@@ -28,7 +28,12 @@ onMounted(() => {
   const c = canvas.value
   // Ohne Animation dreht der Planet trotzdem – nur Flackern, Niederschlag und Blitze entfallen
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const renderer = c && createPlanetRenderer(c, { reducedMotion })
+  const renderer =
+    c &&
+    createPlanetRenderer(c, {
+      reducedMotion,
+      onUnsupported: () => (supported.value = false),
+    })
   if (!c || !renderer) {
     supported.value = false // Fallback: CSS-Farbverlauf des Planeten bleibt sichtbar
     return

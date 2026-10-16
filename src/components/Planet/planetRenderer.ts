@@ -517,6 +517,8 @@ const WEATHER_IDS: Record<WeatherCondition, number> = {
 
 export interface PlanetRendererOptions {
   reducedMotion: boolean
+  // Shader ließen sich nicht linken (erst nach dem Kompilieren im Hintergrund bekannt)
+  onUnsupported?: () => void
 }
 
 // Breite der Rundum-Textur: ~2,5 Texel pro Planeten-Pixel, als Zweierpotenz (für REPEAT)
@@ -537,14 +539,10 @@ function createProgram(
     if (!shader) return null
     gl.shaderSource(shader, source)
     gl.compileShader(shader)
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.error(gl.getShaderInfoLog(shader))
-      gl.deleteShader(shader)
-      return null
-    }
     return shader
   }
 
+  // Kein Status abfragen – das würde warten, bis der Treiber fertig kompiliert hat
   const vertex = compile(gl.VERTEX_SHADER, vertexSource)
   const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource)
   const program = gl.createProgram()
@@ -554,15 +552,20 @@ function createProgram(
   gl.attachShader(program, fragment)
   attributes.forEach((name, location) => gl.bindAttribLocation(program, location, name))
   gl.linkProgram(program)
-  gl.deleteShader(vertex)
-  gl.deleteShader(fragment)
+  return { program, shaders: [vertex, fragment] }
+}
 
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+type PendingProgram = NonNullable<ReturnType<typeof createProgram>>
+
+// Prüft das Ergebnis eines fertig gelinkten Programms (blockiert, falls noch nicht fertig)
+function finishProgram(gl: WebGLRenderingContext, { program, shaders }: PendingProgram) {
+  const ok = gl.getProgramParameter(program, gl.LINK_STATUS) as boolean
+  if (!ok) {
+    for (const shader of shaders) console.error(gl.getShaderInfoLog(shader))
     console.error(gl.getProgramInfoLog(program))
-    gl.deleteProgram(program)
-    return null
   }
-  return program
+  for (const shader of shaders) gl.deleteShader(shader)
+  return ok
 }
 
 export function createPlanetRenderer(
@@ -577,15 +580,22 @@ export function createPlanetRenderer(
   })
   if (!gl) return null
 
-  const bakeProgram = createProgram(gl, COMMON + BAKE_SHADER)
-  const normalProgram = createProgram(gl, COMMON + NORMAL_SHADER)
-  const frameProgram = createProgram(gl, COMMON + FRAME_SHADER)
-  const campProgram = createProgram(gl, CAMP_FRAGMENT_SHADER, CAMP_VERTEX_SHADER, [
-    'aPosition',
-    'aNormal',
-    'aColor',
-  ])
-  if (!bakeProgram || !normalProgram || !frameProgram || !campProgram) return null
+  // Unter Windows (Direct3D) dauert das Kompilieren der Shader spürbar. Mit dieser Erweiterung
+  // passiert es im Hintergrund, die Seite bleibt bedienbar und bis dahin ist der CSS-Planet zu sehen.
+  const parallelCompile = gl.getExtension('KHR_parallel_shader_compile')
+
+  const pending = [
+    createProgram(gl, COMMON + BAKE_SHADER),
+    createProgram(gl, COMMON + NORMAL_SHADER),
+    createProgram(gl, COMMON + FRAME_SHADER),
+    createProgram(gl, CAMP_FRAGMENT_SHADER, CAMP_VERTEX_SHADER, ['aPosition', 'aNormal', 'aColor']),
+  ]
+  if (pending.some((p) => !p)) return null
+  const [bake, normal, frame, camp] = pending as PendingProgram[]
+  const bakeProgram = bake!.program
+  const normalProgram = normal!.program
+  const frameProgram = frame!.program
+  const campProgram = camp!.program
 
   // Ein Dreieck, das den ganzen Canvas abdeckt
   const buffer = gl.createBuffer()
@@ -621,25 +631,54 @@ export function createPlanetRenderer(
   const framebuffer = gl.createFramebuffer()
   const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number
 
-  gl.useProgram(normalProgram)
-  const normalTexel = gl.getUniformLocation(normalProgram, 'uTexel')
-  gl.uniform1i(gl.getUniformLocation(normalProgram, 'uHeight'), 0)
+  // Uniforms erst nach dem Linken einrichten – jeder Zugriff vorher würde auf den Treiber warten
+  const setupUniforms = () => {
+    const at = (program: WebGLProgram, name: string) => gl.getUniformLocation(program, name)
 
-  gl.useProgram(frameProgram)
-  const frameTime = gl.getUniformLocation(frameProgram, 'uTime')
-  const frameAngle = gl.getUniformLocation(frameProgram, 'uAngle')
-  const frameCloudAngle = gl.getUniformLocation(frameProgram, 'uCloudAngle')
-  const framePixel = gl.getUniformLocation(frameProgram, 'uPixel')
-  const frameWeather = gl.getUniformLocation(frameProgram, 'uWeather')
-  const frameIntensity = gl.getUniformLocation(frameProgram, 'uIntensity')
-  gl.uniform1f(gl.getUniformLocation(frameProgram, 'uMotion'), options.reducedMotion ? 0 : 1)
-  gl.uniform1f(gl.getUniformLocation(frameProgram, 'uExtent'), EXTENT)
-  gl.uniform1i(gl.getUniformLocation(frameProgram, 'uSurface'), 0)
+    gl.useProgram(normalProgram)
+    gl.uniform1i(at(normalProgram, 'uHeight'), 0)
 
-  gl.useProgram(campProgram)
-  const campAngle = gl.getUniformLocation(campProgram, 'uAngle')
-  gl.uniform1f(gl.getUniformLocation(campProgram, 'uExtent'), EXTENT)
+    gl.useProgram(frameProgram)
+    gl.uniform1f(at(frameProgram, 'uMotion'), options.reducedMotion ? 0 : 1)
+    gl.uniform1f(at(frameProgram, 'uExtent'), EXTENT)
+    gl.uniform1i(at(frameProgram, 'uSurface'), 0)
 
+    gl.useProgram(campProgram)
+    gl.uniform1f(at(campProgram, 'uExtent'), EXTENT)
+
+    return {
+      normalTexel: at(normalProgram, 'uTexel'),
+      frameTime: at(frameProgram, 'uTime'),
+      frameAngle: at(frameProgram, 'uAngle'),
+      frameCloudAngle: at(frameProgram, 'uCloudAngle'),
+      framePixel: at(frameProgram, 'uPixel'),
+      frameWeather: at(frameProgram, 'uWeather'),
+      frameIntensity: at(frameProgram, 'uIntensity'),
+      campAngle: at(campProgram, 'uAngle'),
+    }
+  }
+
+  let uniforms: ReturnType<typeof setupUniforms> | null = null
+  let failed = false
+
+  // true, sobald alle Programme gelinkt und eingerichtet sind
+  const ensureReady = () => {
+    if (uniforms) return true
+    if (failed) return false
+    const done = (p: PendingProgram) =>
+      gl.getProgramParameter(p.program, parallelCompile!.COMPLETION_STATUS_KHR) as boolean
+    if (parallelCompile && !pending.every((p) => done(p!))) return false
+
+    if (!pending.every((p) => finishProgram(gl, p!))) {
+      failed = true
+      options.onUnsupported?.()
+      return false
+    }
+    uniforms = setupUniforms()
+    return true
+  }
+
+  let weather = { id: 0, intensity: 0 }
   let size = 0
   let textureWidth = 0
   let textureHeight = 0
@@ -698,9 +737,9 @@ export function createPlanetRenderer(
   }
 
   // Normalen aus den fertigen Höhen – billig, daher in einem Zug
-  const bakeNormals = () => {
+  const bakeNormals = (u: NonNullable<typeof uniforms>) => {
     gl.useProgram(normalProgram)
-    gl.uniform2f(normalTexel, 1 / textureWidth, 1 / textureHeight)
+    gl.uniform2f(u.normalTexel, 1 / textureWidth, 1 / textureHeight)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, heightTexture)
     drawInto(surfaceTexture, normalProgram)
@@ -714,19 +753,15 @@ export function createPlanetRenderer(
 
       const width = surfaceTextureWidth(size / EXTENT, maxTextureSize)
       if (width !== textureWidth) allocateSurface(width)
-
-      gl.useProgram(frameProgram)
-      gl.uniform1f(framePixel, (3 * EXTENT) / size)
     },
 
     setWeather(scene) {
-      gl.useProgram(frameProgram)
-      gl.uniform1f(frameWeather, scene ? WEATHER_IDS[scene.condition] : 0)
-      gl.uniform1f(frameIntensity, scene?.intensity ?? 0)
+      weather = { id: scene ? WEATHER_IDS[scene.condition] : 0, intensity: scene?.intensity ?? 0 }
     },
 
     render(time, angles) {
-      if (!size) return
+      if (!size || !ensureReady()) return
+      const u = uniforms!
       if (bakedRows < textureHeight) {
         bakeNextStrip()
         gl.viewport(0, 0, size, size)
@@ -734,20 +769,23 @@ export function createPlanetRenderer(
         gl.clear(gl.COLOR_BUFFER_BIT)
         return
       }
-      if (!surfaceReady) bakeNormals()
+      if (!surfaceReady) bakeNormals(u)
 
       gl.viewport(0, 0, size, size)
       gl.useProgram(frameProgram)
-      gl.uniform1f(frameTime, options.reducedMotion ? 0 : time)
-      gl.uniform1f(frameAngle, angles.planet)
-      gl.uniform1f(frameCloudAngle, angles.clouds)
+      gl.uniform1f(u.frameTime, options.reducedMotion ? 0 : time)
+      gl.uniform1f(u.frameAngle, angles.planet)
+      gl.uniform1f(u.frameCloudAngle, angles.clouds)
+      gl.uniform1f(u.framePixel, (3 * EXTENT) / size)
+      gl.uniform1f(u.frameWeather, weather.id)
+      gl.uniform1f(u.frameIntensity, weather.intensity)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
       useFullscreenTriangle()
       gl.drawArrays(gl.TRIANGLES, 0, 3)
 
       gl.useProgram(campProgram)
-      gl.uniform1f(campAngle, angles.planet)
+      gl.uniform1f(u.campAngle, angles.planet)
       useCampMesh()
       gl.clear(gl.DEPTH_BUFFER_BIT)
       gl.enable(gl.DEPTH_TEST)
