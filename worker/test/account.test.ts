@@ -32,6 +32,15 @@ describe('DELETE /api/auth/account', () => {
     },
   )
 
+  it('sperrt nach 10 falschen Passwörtern und lässt das Konto bestehen', async () => {
+    const cookie = await login('josh', 'geheim123')
+    for (let i = 0; i < 10; i++) expect((await deleteAccount(cookie, 'falsch123')).status).toBe(400)
+    const res = await deleteAccount(cookie, 'geheim123')
+    expect(res.status).toBe(429)
+    expect(await res.json()).toEqual({ error: 'Zu viele Fehlversuche. Bitte warte 15 Minuten.' })
+    expect(await me(cookie)).toMatchObject({ id: joshId })
+  })
+
   it('sperrt Benutzer samt allen Sessions und das Cookie, behält aber die Zeile', async () => {
     const cookie = await login('josh', 'geheim123')
     await login('josh', 'geheim123')

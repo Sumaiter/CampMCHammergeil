@@ -3,9 +3,17 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { api, createUser, login, me, resetDb } from './helpers'
 
 const LOGIN_ERROR = { error: 'Benutzername oder Passwort falsch' }
+const TOO_MANY_ATTEMPTS = { error: 'Zu viele Fehlversuche. Bitte warte 15 Minuten.' }
 
 const postLogin = (body: unknown, ip?: string) =>
   api('/api/auth/login', { method: 'POST', body, ip })
+
+const RIGHT = { username: 'josh', password: 'geheim123' }
+const WRONG = { username: 'josh', password: 'falsch123' }
+
+async function failLogins(count: number, body: unknown = WRONG) {
+  for (let i = 0; i < count; i++) expect((await postLogin(body)).status).toBe(401)
+}
 
 const changePassword = (cookie: string, currentPassword: string, newPassword: string) =>
   api('/api/auth/password', { method: 'POST', cookie, body: { currentPassword, newPassword } })
@@ -65,6 +73,40 @@ describe('/api/auth', () => {
       expect(await res.json()).toEqual({
         error: 'Zu viele Login-Versuche. Bitte warte eine Minute.',
       })
+    })
+
+    it('sperrt ein Konto nach 10 Fehlversuchen, auch über verschiedene IPs', async () => {
+      await failLogins(10)
+      const res = await postLogin({ username: 'JOSH', password: 'geheim123' })
+      expect(res.status).toBe(429)
+      expect(await res.json()).toEqual(TOO_MANY_ATTEMPTS)
+    })
+
+    it('sperrt unbekannte Benutzernamen genauso, damit nichts über Konten verraten wird', async () => {
+      const unknown = { username: 'niemand', password: 'falsch123' }
+      await failLogins(10, unknown)
+      expect((await postLogin(unknown)).status).toBe(429)
+    })
+
+    it('zählt gleichzeitige Versuche einzeln', async () => {
+      const results = await Promise.all(Array.from({ length: 15 }, () => postLogin(WRONG)))
+      const statuses = results.map((res) => res.status)
+      expect(statuses.filter((status) => status === 401)).toHaveLength(10)
+      expect(statuses.filter((status) => status === 429)).toHaveLength(5)
+    })
+
+    it('setzt den Zähler nach erfolgreichem Login zurück', async () => {
+      await failLogins(9)
+      expect((await postLogin(RIGHT)).status).toBe(200)
+      await failLogins(9)
+      expect((await postLogin(RIGHT)).status).toBe(200)
+    })
+
+    it('gibt das Konto nach Ablauf des Zeitfensters wieder frei', async () => {
+      await failLogins(10)
+      expect((await postLogin(RIGHT)).status).toBe(429)
+      await env.DB.prepare('UPDATE login_attempts SET reset_at = 1').run()
+      expect((await postLogin(RIGHT)).status).toBe(200)
     })
   })
 
@@ -131,6 +173,17 @@ describe('/api/auth', () => {
         isAdmin: false,
         mustChangePassword: false,
       })
+    })
+
+    it('sperrt nach 10 falschen aktuellen Passwörtern, auch den Login', async () => {
+      const cookie = await login('josh', 'geheim123')
+      for (let i = 0; i < 10; i++) {
+        expect((await changePassword(cookie, 'falsch123', 'neuespass1')).status).toBe(400)
+      }
+      const res = await changePassword(cookie, 'geheim123', 'neuespass1')
+      expect(res.status).toBe(429)
+      expect(await res.json()).toEqual(TOO_MANY_ATTEMPTS)
+      expect((await postLogin(RIGHT)).status).toBe(429)
     })
 
     it('lehnt zu kurzes neues Passwort mit 400 ab', async () => {

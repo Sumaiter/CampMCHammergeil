@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
 import { deleteCookie, setCookie } from 'hono/cookie'
-import type { AppEnv } from '../types'
+import type { AppEnv, User } from '../types'
 import { requireUser } from '../middleware'
 import { deleteUserUnlessLastAdmin } from './admin'
 import { hashPassword, verifyPassword } from '../lib/password'
+import { countPasswordAttempt, resetPasswordAttempts } from '../lib/passwordAttempts'
 import {
   createSession,
   deleteSession,
@@ -30,13 +31,21 @@ type UserRow = {
   must_change_password: number
 }
 
-// Prüft das Passwort des eingeloggten Benutzers (für sensible Aktionen).
 async function checkPassword(db: D1Database, userId: number, password: string): Promise<boolean> {
   const row = await db
     .prepare('SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL')
     .bind(userId)
     .first<{ password_hash: string }>()
   return !!row && (await verifyPassword(password, row.password_hash))
+}
+
+// Prüft das Passwort des eingeloggten Benutzers (für sensible Aktionen). Zählt wie ein Login-Versuch,
+// damit eine übernommene Session nicht zum Durchprobieren des Passworts taugt.
+async function confirmPassword(db: D1Database, user: User, password: string): Promise<boolean> {
+  await countPasswordAttempt(db, user.username)
+  const valid = await checkPassword(db, user.id, password)
+  if (valid) await resetPasswordAttempts(db, user.username)
+  return valid
 }
 
 export const authRoutes = new Hono<AppEnv>()
@@ -49,6 +58,7 @@ authRoutes.post('/login', async (c) => {
   const body = await readJson<{ username: unknown; password: unknown }>(c)
   const username = normalizeUsername(body.username)
   const password = asText(body.password)
+  await countPasswordAttempt(c.env.DB, username)
 
   const row = username
     ? await c.env.DB.prepare(
@@ -61,6 +71,7 @@ authRoutes.post('/login', async (c) => {
   const valid = await verifyPassword(password, row?.password_hash ?? (await getDummyHash()))
   if (!row || !valid) throw new HttpError(401, LOGIN_FAILED)
 
+  await resetPasswordAttempts(c.env.DB, username)
   const { token } = await createSession(c.env.DB, row.id)
   setCookie(c, SESSION_COOKIE, token, { ...COOKIE_OPTIONS, maxAge: SESSION_TTL_SECONDS })
   return c.json({ user: toUser(row) })
@@ -80,7 +91,7 @@ authRoutes.post('/password', requireUser, async (c) => {
 
   // Wer das vorläufige Passwort gerade erst zum Login benutzt hat, muss es nicht erneut eingeben.
   const current = asText(body.currentPassword)
-  if (!user.mustChangePassword && !(await checkPassword(c.env.DB, user.id, current))) {
+  if (!user.mustChangePassword && !(await confirmPassword(c.env.DB, user, current))) {
     throw new HttpError(400, 'Aktuelles Passwort ist falsch')
   }
 
@@ -106,7 +117,7 @@ authRoutes.delete('/account', requireUser, async (c) => {
   const user = c.var.user!
   const body = await readJson<{ password: unknown }>(c)
 
-  if (!(await checkPassword(c.env.DB, user.id, asText(body.password)))) {
+  if (!(await confirmPassword(c.env.DB, user, asText(body.password)))) {
     throw new HttpError(400, 'Passwort ist falsch')
   }
 

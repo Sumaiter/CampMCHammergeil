@@ -36,6 +36,7 @@ export async function resetDb(): Promise<void> {
     env.DB.prepare('DELETE FROM shop_items'),
     env.DB.prepare('DELETE FROM sessions'),
     env.DB.prepare('DELETE FROM users'),
+    env.DB.prepare('DELETE FROM login_attempts'),
   ])
 }
 
