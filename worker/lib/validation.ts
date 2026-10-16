@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 
-export type HttpErrorStatus = 400 | 401 | 403 | 404 | 409 | 415 | 429
+export type HttpErrorStatus = 400 | 401 | 403 | 404 | 409 | 415 | 429 | 502
 
 // Erwarteter Fehler mit deutscher Meldung – wird vom zentralen Error-Handler als JSON ausgegeben.
 export class HttpError extends Error {
