@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { createPlanetRenderer, EXTENT, ROTATION_PERIOD } from './planetRenderer'
 import type { WeatherScene } from '@/api/types'
 
-defineProps<{ weather?: WeatherScene | null }>()
+// Wetter-Effekte in der Szene; null = keine
+const props = defineProps<{ weather?: WeatherScene | null }>()
 
 // Höhere Pixeldichte bringt bei Flammen kaum etwas, kostet aber viel Leistung
 const MAX_PIXEL_RATIO = 1.5
@@ -32,6 +33,12 @@ onMounted(() => {
     supported.value = false // Fallback: CSS-Farbverlauf des Planeten bleibt sichtbar
     return
   }
+
+  const stopWeather = watch(
+    () => props.weather,
+    (scene) => renderer.setWeather(scene ?? null),
+    { immediate: true },
+  )
 
   const start = performance.now()
   let frame = 0
@@ -74,6 +81,7 @@ onMounted(() => {
   c.addEventListener('webglcontextlost', onContextLost)
 
   stop = () => {
+    stopWeather()
     cancelAnimationFrame(frame)
     resizeObserver.disconnect()
     intersectionObserver.disconnect()

@@ -4,6 +4,7 @@
 // Rundum-Textur (equirektangulär: Normale + Helligkeit) gebacken. Pro Frame wird diese Textur
 // gedreht auf die Kugel gelegt und beleuchtet, dazu kommen die Flammen.
 
+import type { WeatherCondition, WeatherScene } from '@/api/types'
 import { buildCampMesh, FLOATS_PER_VERTEX } from './campMesh'
 
 // Canvas ist EXTENT-mal so breit wie der Planet, damit die Flammen Platz haben.
@@ -199,6 +200,11 @@ uniform float uTime;
 uniform float uAngle;
 uniform float uPixel;
 uniform sampler2D uSurface;
+// Wetter: 0 klar, 1 bewölkt, 2 Nebel, 3 Regen, 4 Schnee, 5 Gewitter; Stärke 0..1
+uniform float uWeather;
+uniform float uIntensity;
+// 0 bei prefers-reduced-motion: kein Niederschlag, keine Blitze
+uniform float uMotion;
 
 // Dreht um die senkrechte Achse; positive Winkel schieben die Vorderseite nach rechts
 vec3 rotateY(vec3 v, float a) {
@@ -247,6 +253,101 @@ float campClearance(vec3 obj) {
   return 1.0 - smoothstep(0.951057, 0.978148, dot(obj, CAMP_DIR));
 }
 
+// ---------- Wetter am Nürburgring ----------
+
+const vec3 LIGHT = vec3(-0.3487, 0.5480, 0.7971); // normalize(-0.35, 0.55, 0.8)
+
+bool isWeather(float id) {
+  return abs(uWeather - id) < 0.5;
+}
+
+float cloudCover() {
+  if (isWeather(1.0)) return uIntensity;
+  if (uWeather > 2.5) return 0.5 + 0.5 * uIntensity; // Regen, Schnee, Gewitter
+  return 0.0;
+}
+
+// Blitz: zufällig in manchen halben Sekunden, schnell abklingend
+float lightning() {
+  if (!isWeather(5.0) || uMotion < 0.5) return 0.0;
+  float slot = floor(uTime * 2.0);
+  float strike = step(0.93, hash13(vec3(slot, 3.1, 7.7)));
+  float decay = 1.0 - fract(uTime * 2.0);
+  return strike * decay * decay;
+}
+
+// Wolken und Nebel liegen auf der Kugel; Wolken drehen etwas langsamer als der Planet
+vec4 weatherOnSurface(vec4 surface, vec2 p, float r) {
+  if (surface.a <= 0.0 || r >= 1.0) return surface;
+  vec3 n = vec3(p, sqrt(1.0 - r * r));
+
+  float cover = cloudCover();
+  if (cover > 0.0) {
+    vec3 obj = rotateY(n, -uAngle * 0.8);
+    float c = fbm(obj * vec3(2.2, 4.0, 2.2) + vec3(uTime * 0.02, 0.0, 0.0)); // flach gestreckte Bänder
+    float density = smoothstep(0.55 - 0.2 * cover, 0.72, c) * (0.4 + 0.4 * cover);
+    vec3 cloud = uWeather > 2.5 ? vec3(0.5, 0.56, 0.55) : vec3(0.95, 0.98, 0.97);
+    cloud *= 0.55 + 0.45 * max(dot(n, LIGHT), 0.0) + lightning() * 0.8;
+    surface.rgb = mix(surface.rgb, cloud * surface.a, density);
+  }
+
+  if (isWeather(2.0)) {
+    surface.rgb = mix(surface.rgb, vec3(0.75, 0.85, 0.8) * surface.a, 0.35 * uIntensity);
+  }
+  return surface;
+}
+
+// Regenstreifen: schräg, schnell, in Spalten mit Zufallsversatz
+float rainLayer(vec2 p, float cell, float speed, float seed) {
+  vec2 q = vec2(p.x + p.y * 0.25, p.y);
+  float column = floor(q.x / cell);
+  vec3 rnd = hash33(vec3(column, seed, 1.0));
+  if (rnd.x > 0.35 + 0.6 * uIntensity) return 0.0;
+  float along = fract((q.y + uTime * speed * (0.8 + 0.4 * rnd.y)) / 0.6 + rnd.z);
+  float streak = smoothstep(0.0, 0.05, along) * (1.0 - smoothstep(0.12, 0.2, along));
+  float across = abs(fract(q.x / cell) - 0.5) * cell;
+  return streak * (1.0 - smoothstep(0.0, 0.006, across));
+}
+
+// Schneeflocken: langsam, leicht pendelnd
+float snowLayer(vec2 p, float cell, float speed, float seed) {
+  vec2 q = p + vec2(0.0, uTime * speed);
+  vec2 id = floor(q / cell);
+  vec3 rnd = hash33(vec3(id, seed));
+  if (rnd.z > 0.25 + 0.6 * uIntensity) return 0.0;
+  vec2 center = (id + 0.2 + 0.6 * rnd.xy) * cell;
+  center.x += sin(uTime * 1.3 + rnd.x * 6.3) * cell * 0.15;
+  float size = cell * (0.08 + 0.06 * rnd.y);
+  return 1.0 - smoothstep(size * 0.4, size, length(q - center));
+}
+
+// Nebel-Dunst, Niederschlag und Blitz liegen vor der ganzen Szene
+vec4 weatherInFront(vec4 color, vec2 p, float r) {
+  float fade = 1.0 - smoothstep(uExtent - 0.4, uExtent, r);
+  if (fade <= 0.0) return color;
+
+  if (isWeather(2.0)) {
+    float haze = 0.3 * uIntensity * exp(-max(r - 1.0, 0.0) * 4.0) * (1.0 - smoothstep(1.0, 1.4, r));
+    color += vec4(vec3(0.75, 0.85, 0.8) * haze, haze) * (1.0 - color.a);
+  }
+
+  if (uMotion < 0.5) return color;
+
+  float drops = 0.0;
+  vec3 tint = vec3(0.7, 0.85, 0.95);
+  if (isWeather(3.0) || isWeather(5.0)) {
+    drops = rainLayer(p, 0.045, 3.2, 1.0) * 0.55 + rainLayer(p * 1.3 + 7.0, 0.04, 2.4, 2.0) * 0.3;
+  } else if (isWeather(4.0)) {
+    drops = snowLayer(p, 0.16, 0.25, 1.0) * 0.9 + snowLayer(p * 1.4 + 3.0, 0.14, 0.17, 2.0) * 0.6;
+    tint = vec3(0.95, 1.0, 0.98);
+  }
+  drops *= fade;
+  color = vec4(tint * drops, drops) + color * (1.0 - drops);
+
+  float flash = lightning() * 0.35 * fade * (1.0 - smoothstep(0.6, uExtent, r));
+  return color + vec4(vec3(0.75, 0.85, 0.9) * flash, flash) * (1.0 - color.a * 0.5);
+}
+
 // Dünnes Lodern auf der Vorderseite: hängt an der Oberfläche und züngelt nach oben.
 // Zur Mitte hin (hinter dem Schriftzug) schwächer, damit die Schrift lesbar bleibt.
 float surfaceFlames(vec2 p, float r) {
@@ -257,20 +358,14 @@ float surfaceFlames(vec2 p, float r) {
   return smoothstep(0.55, 0.72, lick) * 0.45 * smoothstep(0.35, 0.95, r) * campClearance(obj);
 }
 
-void main() {
-  vec2 p = planetCoord();
-  float r = length(p);
+// Planet mit Flammen (vormultipliziertes RGBA)
+vec4 scene(vec2 p, float r) {
   vec4 surface = planet(p, r);
   surface.rgb += vec3(0.12, 0.92, 0.55) * surfaceFlames(p, r) * surface.a;
+  surface = weatherOnSurface(surface, p, r);
 
-  if (r < 0.85) {
-    gl_FragColor = surface;
-    return;
-  }
-  if (r > uExtent) {
-    gl_FragColor = vec4(0.0);
-    return;
-  }
+  if (r < 0.85) return surface;
+  if (r > uExtent) return vec4(0.0);
 
   vec2 dir = p / r;
   float d = max(r - 1.0, 0.0);
@@ -302,7 +397,13 @@ void main() {
   // Flackerndes Licht der Flammen auf dem Planetenrand
   vec3 rimLight = color * f * smoothstep(0.88, 1.0, r) * 0.45 * surface.a;
 
-  gl_FragColor = vec4(surface.rgb + rimLight, surface.a) + back * (1.0 - surface.a);
+  return vec4(surface.rgb + rimLight, surface.a) + back * (1.0 - surface.a);
+}
+
+void main() {
+  vec2 p = planetCoord();
+  float r = length(p);
+  gl_FragColor = weatherInFront(scene(p, r), p, r);
 }
 `
 
@@ -354,7 +455,19 @@ export interface PlanetRenderer {
   resize(size: number): void
   // time treibt Flammen & Co. (bei reducedMotion eingefroren), angle (Radiant) die Drehung
   render(time: number, angle: number): void
+  // null = keine Wettereffekte
+  setWeather(scene: WeatherScene | null): void
   dispose(): void
+}
+
+// Muss zu uWeather im Shader passen
+const WEATHER_IDS: Record<WeatherCondition, number> = {
+  clear: 0,
+  cloudy: 1,
+  fog: 2,
+  rain: 3,
+  snow: 4,
+  storm: 5,
 }
 
 export interface PlanetRendererOptions {
@@ -465,6 +578,9 @@ export function createPlanetRenderer(
   const frameTime = gl.getUniformLocation(frameProgram, 'uTime')
   const frameAngle = gl.getUniformLocation(frameProgram, 'uAngle')
   const framePixel = gl.getUniformLocation(frameProgram, 'uPixel')
+  const frameWeather = gl.getUniformLocation(frameProgram, 'uWeather')
+  const frameIntensity = gl.getUniformLocation(frameProgram, 'uIntensity')
+  gl.uniform1f(gl.getUniformLocation(frameProgram, 'uMotion'), options.reducedMotion ? 0 : 1)
   gl.uniform1f(gl.getUniformLocation(frameProgram, 'uExtent'), EXTENT)
   gl.uniform1i(gl.getUniformLocation(frameProgram, 'uSurface'), 0)
 
@@ -506,6 +622,12 @@ export function createPlanetRenderer(
 
       gl.useProgram(frameProgram)
       gl.uniform1f(framePixel, (3 * EXTENT) / size)
+    },
+
+    setWeather(scene) {
+      gl.useProgram(frameProgram)
+      gl.uniform1f(frameWeather, scene ? WEATHER_IDS[scene.condition] : 0)
+      gl.uniform1f(frameIntensity, scene?.intensity ?? 0)
     },
 
     render(time, angle) {
