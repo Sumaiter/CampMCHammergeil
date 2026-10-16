@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { secureHeaders } from 'hono/secure-headers'
 import type { AppEnv } from './types'
 import { HttpError } from './lib/validation'
 import { loadUser } from './middleware'
@@ -10,6 +11,16 @@ import { weatherRoutes } from './routes/weather'
 const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE']
 
 export const app = new Hono<AppEnv>()
+
+// Die API liefert nur JSON – nichts davon darf als Seite laufen oder eingebettet werden.
+// Die Header für die Seite selbst stehen in public/_headers.
+app.use(
+  '/api/*',
+  secureHeaders({
+    contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+    xFrameOptions: 'DENY',
+  }),
+)
 
 // Schreibende Anfragen nur als JSON – zusammen mit SameSite=Lax der Schutz gegen CSRF.
 app.use('/api/*', async (c, next) => {
