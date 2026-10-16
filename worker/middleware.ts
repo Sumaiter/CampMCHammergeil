@@ -10,6 +10,7 @@ export const PASSWORD_CHANGE_REQUIRED = 'password_change_required'
 // Passwort ändern und – als Alternative zum Passwortwechsel – das eigene Konto löschen.
 const ALLOWED_WHILE_PASSWORD_CHANGE_PENDING = new Set([
   'GET /api/auth/me',
+  'GET /api/weather',
   'POST /api/auth/login',
   'POST /api/auth/logout',
   'POST /api/auth/password',

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api } from './helpers'
-import { WEATHER_CACHE_KEY } from '../routes/weather'
+import { api, createUser, login, resetDb } from './helpers'
+import { clearWeatherCache, WEATHER_CACHE_KEY } from '../routes/weather'
 
 const DATES = ['2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19']
 
@@ -28,7 +28,7 @@ describe('GET /api/weather', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(async () => {
-    await caches.default.delete(WEATHER_CACHE_KEY)
+    await clearWeatherCache()
     fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(200, forecast))
   })
 
@@ -79,5 +79,35 @@ describe('GET /api/weather', () => {
     fetchSpy.mockImplementationOnce(async () => json(200, {}))
     expect((await api('/api/weather')).status).toBe(502)
     expect((await api('/api/weather')).status).toBe(200)
+  })
+  it('cacht auch ohne Cache API (workers.dev)', async () => {
+    expect((await api('/api/weather')).status).toBe(200)
+    await caches.default.delete(WEATHER_CACHE_KEY)
+    expect((await api('/api/weather')).status).toBe(200)
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('lässt Tage mit fehlenden Werten weg', async () => {
+    const gaps = structuredClone(forecast) as unknown as {
+      daily: { temperature_2m_max: (number | null)[] }
+    }
+    gaps.daily.temperature_2m_max[1] = null
+    fetchSpy.mockImplementation(async () => json(200, gaps))
+    const body = (await (await api('/api/weather')).json()) as { daily: { date: string }[] }
+    expect(body.daily.map((day) => day.date)).toEqual(['2026-10-16', '2026-10-18', '2026-10-19'])
+  })
+
+  it('meldet 502, wenn die aktuelle Wetterlage unvollständig ist', async () => {
+    const broken = structuredClone(forecast) as unknown as { current: { weather_code: unknown } }
+    broken.current.weather_code = null
+    fetchSpy.mockImplementation(async () => json(200, broken))
+    expect((await api('/api/weather')).status).toBe(502)
+  })
+
+  it('ist auch bei ausstehender Passwortänderung erreichbar', async () => {
+    await resetDb()
+    await createUser('neu', 'startpass1', false, true)
+    const cookie = await login('neu', 'startpass1')
+    expect((await api('/api/weather', { cookie })).status).toBe(200)
   })
 })

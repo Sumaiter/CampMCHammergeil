@@ -23,9 +23,9 @@ type Forecast = {
   current?: { temperature_2m: number; weather_code: number; is_day: number; wind_speed_10m: number }
   daily?: {
     time: string[]
-    weather_code: number[]
-    temperature_2m_max: number[]
-    temperature_2m_min: number[]
+    weather_code: (number | null)[]
+    temperature_2m_max: (number | null)[]
+    temperature_2m_min: (number | null)[]
     precipitation_probability_max?: (number | null)[]
   }
 }
@@ -48,8 +48,19 @@ type Weather = {
   updatedAt: string
 }
 
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
 function toWeather({ current, daily }: Forecast): Weather | null {
-  if (typeof current?.temperature_2m !== 'number' || !Array.isArray(daily?.time)) return null
+  if (
+    !current ||
+    ![current.temperature_2m, current.weather_code, current.is_day, current.wind_speed_10m].every(
+      isNumber,
+    ) ||
+    !Array.isArray(daily?.time)
+  ) {
+    return null
+  }
   const days = daily.time.length
   if (
     [daily.weather_code, daily.temperature_2m_max, daily.temperature_2m_min].some(
@@ -66,13 +77,23 @@ function toWeather({ current, daily }: Forecast): Weather | null {
       isDay: current.is_day === 1,
       windKmh: current.wind_speed_10m,
     },
-    daily: daily.time.map((date, i) => ({
-      date,
-      condition: mapWeatherCode(daily.weather_code[i]!).condition,
-      max: daily.temperature_2m_max[i]!,
-      min: daily.temperature_2m_min[i]!,
-      rainChance: daily.precipitation_probability_max?.[i] ?? null,
-    })),
+    // Open-Meteo liefert für fehlende Werte null – solche Tage lassen wir weg
+    daily: daily.time.flatMap((date, i) => {
+      const code = daily.weather_code[i]
+      const max = daily.temperature_2m_max[i]
+      const min = daily.temperature_2m_min[i]
+      if (!isNumber(code) || !isNumber(max) || !isNumber(min)) return []
+      const rainChance = daily.precipitation_probability_max?.[i]
+      return [
+        {
+          date,
+          condition: mapWeatherCode(code).condition,
+          max,
+          min,
+          rainChance: isNumber(rainChance) ? rainChance : null,
+        },
+      ]
+    }),
     updatedAt: new Date().toISOString(),
   }
 }
@@ -89,21 +110,38 @@ async function fetchWeather(): Promise<Weather> {
   return weather
 }
 
+// Auf *.workers.dev ist die Cache API wirkungslos – deshalb zusätzlich im Speicher der
+// Worker-Instanz. Die Cache API greift, sobald die Seite auf einer eigenen Domain läuft.
+let memory: { weather: Weather; expires: number } | null = null
+
+async function cachedWeather(): Promise<Weather> {
+  if (memory && memory.expires > Date.now()) return memory.weather
+
+  const cache = caches.default
+  const hit = await cache.match(WEATHER_CACHE_KEY)
+  const weather = hit ? ((await hit.json()) as Weather) : await fetchWeather()
+  if (!hit) {
+    const response = Response.json(weather, {
+      headers: { 'Cache-Control': `public, max-age=${CACHE_SECONDS}` },
+    })
+    await cache.put(WEATHER_CACHE_KEY, response)
+  }
+
+  // Ablauf richtet sich nach dem Abrufzeitpunkt, auch wenn der Treffer aus der Cache API kam
+  memory = { weather, expires: Date.parse(weather.updatedAt) + CACHE_SECONDS * 1000 }
+  return weather
+}
+
 export const weatherRoutes = new Hono<AppEnv>()
 
 weatherRoutes.get('/', async (c) => {
-  const cache = caches.default
-  let cached = await cache.match(WEATHER_CACHE_KEY)
-
-  if (!cached) {
-    const weather = await fetchWeather()
-    cached = Response.json(weather, {
-      headers: { 'Cache-Control': `public, max-age=${CACHE_SECONDS}` },
-    })
-    await cache.put(WEATHER_CACHE_KEY, cached.clone())
-  }
-
-  return c.json((await cached.json()) as Weather, 200, {
+  return c.json(await cachedWeather(), 200, {
     'Cache-Control': `public, max-age=${CLIENT_CACHE_SECONDS}`,
   })
 })
+
+// Leert beide Caches (für Tests)
+export async function clearWeatherCache(): Promise<void> {
+  memory = null
+  await caches.default.delete(WEATHER_CACHE_KEY)
+}
