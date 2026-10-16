@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { isStale, useWeather } from '@/weather/useWeather'
-import { weatherEmoji, weekdayLabel } from '@/weather/emoji'
+import { forecastDays, staleLabel, useWeather } from '@/weather/useWeather'
+import { weatherEmoji } from '@/weather/emoji'
 
-const { weather, effectsEnabled, setEffectsEnabled, start } = useWeather()
+const { weather, effectsEnabled, now, setEffectsEnabled, start } = useWeather()
 
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
-const now = ref(Date.now())
 
 const current = computed(() => weather.value?.current)
 const temperature = computed(() =>
@@ -16,18 +15,8 @@ const temperature = computed(() =>
 const emoji = computed(() =>
   current.value ? weatherEmoji(current.value.condition, current.value.isDay) : '🌡️',
 )
-const staleSince = computed(() => {
-  if (!weather.value || !isStale(weather.value, now.value)) return null
-  return new Date(weather.value.updatedAt).toLocaleTimeString('de-DE', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-})
-const days = computed(() => {
-  const daily = weather.value?.daily ?? []
-  const today = daily[0]?.date ?? ''
-  return daily.map((day) => ({ ...day, label: weekdayLabel(day.date, today) }))
-})
+const stale = computed(() => (weather.value ? staleLabel(weather.value, now.value) : null))
+const days = computed(() => (weather.value ? forecastDays(weather.value, now.value) : []))
 
 const onDocumentClick = (event: MouseEvent) => {
   if (open.value && !root.value?.contains(event.target as Node)) open.value = false
@@ -37,18 +26,15 @@ const onKeydown = (event: KeyboardEvent) => {
 }
 
 let stop: (() => void) | undefined
-let clock: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
   stop = start()
-  clock = setInterval(() => (now.value = Date.now()), 60_000)
   document.addEventListener('click', onDocumentClick)
   document.addEventListener('keydown', onKeydown)
 })
 
 onUnmounted(() => {
   stop?.()
-  clearInterval(clock)
   document.removeEventListener('click', onDocumentClick)
   document.removeEventListener('keydown', onKeydown)
 })
@@ -67,7 +53,7 @@ onUnmounted(() => {
       <span class="station-icon" aria-hidden="true">{{ emoji }}</span>
       <span class="station-temp">{{ temperature }}</span>
       <span class="station-label">Nürburgring</span>
-      <span v-if="staleSince" class="station-stale">Stand {{ staleSince }}</span>
+      <span v-if="stale" class="station-stale">{{ stale }}</span>
     </button>
 
     <button

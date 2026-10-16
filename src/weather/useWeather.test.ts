@@ -97,10 +97,100 @@ describe('useWeather', () => {
     expect(second.effectsEnabled.value).toBe(false)
   })
 
-  it('isStale erst nach einer Stunde', async () => {
-    const { isStale } = await load()
-    const now = Date.parse('2026-10-16T13:30:00.000Z')
-    expect(isStale(weather('2026-10-16T12:31:00.000Z'), now)).toBe(false)
-    expect(isStale(weather('2026-10-16T12:29:00.000Z'), now)).toBe(true)
+  describe('alte Daten', () => {
+    // 16.10. 14:30 in Berlin (MESZ = UTC+2)
+    const saved = weather('2026-10-16T12:30:00.000Z')
+    saved.daily = ['2026-10-16', '2026-10-17', '2026-10-18'].map((date) => ({
+      date,
+      condition: 'clear' as const,
+      max: 20,
+      min: 10,
+      rainChance: 0,
+    }))
+
+    it('staleLabel: erst nach einer Stunde, mit Datum ab dem nächsten Tag', async () => {
+      const { staleLabel } = await load()
+      expect(staleLabel(saved, Date.parse('2026-10-16T13:29:00.000Z'))).toBeNull()
+      expect(staleLabel(saved, Date.parse('2026-10-16T13:31:00.000Z'))).toBe('Stand 14:30')
+      expect(staleLabel(saved, Date.parse('2026-10-17T06:00:00.000Z'))).toBe('Stand 16.10. 14:30')
+    })
+
+    it('forecastDays: vergangene Tage fallen weg, „Heute“ ist der echte heutige Tag', async () => {
+      const { forecastDays } = await load()
+      const nextMorning = Date.parse('2026-10-17T06:00:00.000Z')
+      expect(forecastDays(saved, nextMorning).map((day) => [day.date, day.label])).toEqual([
+        ['2026-10-17', 'Heute'],
+        ['2026-10-18', 'So'],
+      ])
+    })
+
+    it('sceneFor: keine Wettereffekte mehr, wenn die Daten älter als 6 Stunden sind', async () => {
+      const { sceneFor } = await load()
+      expect(sceneFor(saved, Date.parse('2026-10-16T18:00:00.000Z'))).toEqual({
+        condition: 'rain',
+        intensity: 0.6,
+      })
+      expect(sceneFor(saved, Date.parse('2026-10-16T18:31:00.000Z'))).toBeNull()
+    })
+  })
+
+  describe('start', () => {
+    let listeners: Record<string, (() => void)[]>
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      listeners = {}
+      const target = {
+        visibilityState: 'visible',
+        addEventListener: (type: string, fn: () => void) => (listeners[type] ??= []).push(fn),
+        removeEventListener: (type: string, fn: () => void) =>
+          (listeners[type] = (listeners[type] ?? []).filter((other) => other !== fn)),
+      }
+      vi.stubGlobal('document', target)
+      vi.stubGlobal('window', target)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const fire = (type: string) => listeners[type]?.forEach((fn) => fn())
+
+    it('lädt nach einem Fehler erneut, sobald das Netz zurück ist', async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError('offline'))
+      fetchMock.mockResolvedValue(jsonResponse(200, weather()))
+      const { useWeather } = await load()
+      const { weather: current, start } = useWeather()
+
+      const stop = start()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(current.value).toBeNull()
+
+      fire('online')
+      await vi.waitFor(() => expect(current.value).toEqual(weather()))
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      stop()
+    })
+
+    it('lädt beim Zurückkehren in den Tab neu, wenn der letzte Versuch fehlschlug', async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError('offline'))
+      fetchMock.mockResolvedValue(jsonResponse(200, weather()))
+      const { useWeather } = await load()
+      const stop = useWeather().start()
+      await vi.advanceTimersByTimeAsync(10)
+
+      fire('visibilitychange')
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      stop()
+    })
+
+    it('räumt Listener und Timer auf', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(200, weather()))
+      const { useWeather } = await load()
+      const stop = useWeather().start()
+      stop()
+      expect(Object.values(listeners).flat()).toEqual([])
+      expect(vi.getTimerCount()).toBe(0)
+    })
   })
 })
