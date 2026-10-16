@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { createPlanetRenderer, EXTENT } from './planetRenderer'
+import { createPlanetRenderer, EXTENT, ROTATION_PERIOD } from './planetRenderer'
 import type { WeatherScene } from '@/api/types'
 
 defineProps<{ weather?: WeatherScene | null }>()
@@ -25,20 +25,23 @@ let stop: (() => void) | undefined
 
 onMounted(() => {
   const c = canvas.value
-  const renderer = c && createPlanetRenderer(c)
+  // Ohne Animation dreht der Planet trotzdem – nur Flackern, Niederschlag und Blitze entfallen
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const renderer = c && createPlanetRenderer(c, { reducedMotion })
   if (!c || !renderer) {
     supported.value = false // Fallback: CSS-Farbverlauf des Planeten bleibt sichtbar
     return
   }
 
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const start = performance.now()
   let frame = 0
   let visible = true
 
   const draw = () => {
-    renderer.render(((performance.now() - start) / 1000) % TIME_WRAP_SECONDS)
-    if (visible && !reduceMotion) frame = requestAnimationFrame(draw)
+    const seconds = (performance.now() - start) / 1000
+    const angle = ((seconds % ROTATION_PERIOD) / ROTATION_PERIOD) * 2 * Math.PI
+    renderer.render(seconds % TIME_WRAP_SECONDS, angle)
+    if (visible) frame = requestAnimationFrame(draw)
   }
 
   const restart = () => {

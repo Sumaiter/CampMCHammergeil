@@ -1,11 +1,14 @@
-// WebGL-Renderer für den Planeten: Kraterlandschaft + animierte grüne Flammen.
+// WebGL-Renderer für den Planeten: sich drehende Kraterkugel + animierte grüne Flammen.
 //
-// Die Oberfläche ist teuer (Krater, Licht, Schatten) und ändert sich nicht – sie wird bei
-// jeder Größenänderung einmal in eine Textur gerendert. Pro Frame werden nur die Flammen
-// berechnet und mit dieser Textur kombiniert.
+// Die Oberfläche ist teuer (Krater, Licht, Schatten) und ändert sich nicht – sie wird einmal als
+// Rundum-Textur (equirektangulär: Normale + Helligkeit) gebacken. Pro Frame wird diese Textur
+// gedreht auf die Kugel gelegt und beleuchtet, dazu kommen die Flammen.
 
 // Canvas ist EXTENT-mal so breit wie der Planet, damit die Flammen Platz haben.
 export const EXTENT = 1.9
+
+// Sekunden für eine Umdrehung um die senkrechte Achse
+export const ROTATION_PERIOD = 60
 
 const VERTEX_SHADER = `
 attribute vec2 aPos;
@@ -26,6 +29,11 @@ precision mediump float;
 
 varying vec2 vUv;
 uniform float uExtent;
+
+const float PI = 3.14159265;
+const float TAU = 6.28318531;
+// Helligkeitsfaktor der Oberfläche liegt in 0..1.15 und wird für die Textur auf 0..1 gestaucht
+const float SHADE_SCALE = 1.15;
 
 float hash13(vec3 p3) {
   p3 = fract(p3 * 0.1031);
@@ -75,8 +83,7 @@ vec2 planetCoord() {
 }
 `
 
-const SURFACE_SHADER = `
-uniform float uPixel;
+const BAKE_SHADER = `
 
 // Kraterlagen: x = Maßstab, y = Versatz, z = Dichte (Anteil der Zellen mit Krater)
 const vec3 BIG_CRATERS = vec3(2.0, 0.0, 0.5);
@@ -159,18 +166,13 @@ float surfaceHeight(vec3 n) {
   return h;
 }
 
-void main() {
-  vec2 p = planetCoord();
-  float r = length(p);
-  float alpha = 1.0 - smoothstep(1.0 - uPixel, 1.0, r);
-  if (alpha <= 0.0) {
-    gl_FragColor = vec4(0.0);
-    return;
-  }
 
-  vec2 pc = p / max(r, 1.0);
-  float z = sqrt(max(1.0 - dot(pc, pc), 0.0));
-  vec3 n = vec3(pc, z);
+// Rundum-Textur: x = Länge, y = Breite. Gespeichert wird die fertige Normale (Objektkoordinaten)
+// und ein Helligkeitsfaktor aus Kraterhöhlen und Gesteinston.
+void main() {
+  float lon = (vUv.x - 0.5) * TAU;
+  float lat = (vUv.y - 0.5) * PI;
+  vec3 n = vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
 
   // Oberflächen-Normale aus dem Höhenfeld (Krater werfen Licht und Schatten)
   vec3 t1 = normalize(abs(n.y) < 0.99 ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0)));
@@ -182,34 +184,63 @@ void main() {
   vec3 grad = t1 * (h1 - h0) / eps + t2 * (h2 - h0) / eps;
   vec3 N = normalize(n - grad * 0.38);
 
-  vec3 light = normalize(vec3(-0.35, 0.55, 0.8));
-  float diffuse = max(dot(N, light), 0.0);
   float cavity = smoothstep(-0.12, 0.02, h0);
   float tone = fbm(n * 3.0 + 7.0);
+  float shade = mix(0.7, 1.0, cavity) * (0.85 + 0.3 * tone) / SHADE_SCALE;
+
+  gl_FragColor = vec4(N * 0.5 + 0.5, shade);
+}
+`
+
+const FRAME_SHADER = `
+uniform float uTime;
+uniform float uAngle;
+uniform float uPixel;
+uniform sampler2D uSurface;
+
+// Dreht um die senkrechte Achse; positive Winkel schieben die Vorderseite nach rechts
+vec3 rotateY(vec3 v, float a) {
+  float c = cos(a);
+  float s = sin(a);
+  return vec3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
+}
+
+// Beleuchtete Kugel (vormultipliziertes RGBA)
+vec4 planet(vec2 p, float r) {
+  float alpha = 1.0 - smoothstep(1.0 - uPixel, 1.0, r);
+  if (alpha <= 0.0) return vec4(0.0);
+
+  vec2 pc = p / max(r, 1.0);
+  float z = sqrt(max(1.0 - dot(pc, pc), 0.0));
+  vec3 n = vec3(pc, z);
+
+  vec3 obj = rotateY(n, -uAngle);
+  vec2 uv = vec2(atan(obj.x, obj.z) / TAU + 0.5, asin(clamp(obj.y, -1.0, 1.0)) / PI + 0.5);
+  vec4 surface = texture2D(uSurface, uv);
+  vec3 N = rotateY(normalize(surface.xyz * 2.0 - 1.0), uAngle);
+  float shade = surface.a * SHADE_SCALE;
+
+  vec3 light = normalize(vec3(-0.35, 0.55, 0.8));
+  float diffuse = max(dot(N, light), 0.0);
 
   vec3 deep = vec3(0.01, 0.2, 0.11);
   vec3 mid = vec3(0.12, 0.8, 0.5);
   vec3 bright = vec3(0.5, 1.0, 0.75);
   vec3 col = mix(deep, mid, clamp(diffuse * 1.1 + 0.2, 0.0, 1.0));
   col = mix(col, bright, pow(diffuse, 5.0) * 0.5);
-  col *= mix(0.7, 1.0, cavity) * (0.85 + 0.3 * tone);
+  col *= shade;
 
   // Unterseite etwas dunkler + leuchtende Atmosphäre am Planetenrand
   col *= mix(0.68, 1.0, smoothstep(-0.9, 0.3, n.y) * smoothstep(0.0, 0.35, z));
   col += vec3(0.2, 1.0, 0.6) * pow(1.0 - z, 3.0) * 0.45;
 
-  gl_FragColor = vec4(col * alpha, alpha);
+  return vec4(col * alpha, alpha);
 }
-`
-
-const FLAME_SHADER = `
-uniform float uTime;
-uniform sampler2D uSurface;
 
 void main() {
   vec2 p = planetCoord();
   float r = length(p);
-  vec4 surface = texture2D(uSurface, vUv);
+  vec4 surface = planet(p, r);
 
   if (r < 0.85) {
     gl_FragColor = surface;
@@ -253,8 +284,20 @@ void main() {
 
 export interface PlanetRenderer {
   resize(size: number): void
-  render(time: number): void
+  // time treibt Flammen & Co. (bei reducedMotion eingefroren), angle (Radiant) die Drehung
+  render(time: number, angle: number): void
   dispose(): void
+}
+
+export interface PlanetRendererOptions {
+  reducedMotion: boolean
+}
+
+// Breite der Rundum-Textur: ~2,5 Texel pro Planeten-Pixel, als Zweierpotenz (für REPEAT)
+function surfaceTextureWidth(planetPixels: number, maxTextureSize: number): number {
+  let width = 512
+  while (width < planetPixels * 2.5 && width < 2048) width *= 2
+  return Math.min(width, maxTextureSize)
 }
 
 function createProgram(gl: WebGLRenderingContext, fragmentSource: string) {
@@ -291,13 +334,16 @@ function createProgram(gl: WebGLRenderingContext, fragmentSource: string) {
   return program
 }
 
-export function createPlanetRenderer(canvas: HTMLCanvasElement): PlanetRenderer | null {
+export function createPlanetRenderer(
+  canvas: HTMLCanvasElement,
+  options: PlanetRendererOptions,
+): PlanetRenderer | null {
   const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false })
   if (!gl) return null
 
-  const surfaceProgram = createProgram(gl, SURFACE_SHADER)
-  const flameProgram = createProgram(gl, FLAME_SHADER)
-  if (!surfaceProgram || !flameProgram) return null
+  const bakeProgram = createProgram(gl, BAKE_SHADER)
+  const frameProgram = createProgram(gl, FRAME_SHADER)
+  if (!bakeProgram || !frameProgram) return null
 
   // Ein Dreieck, das den ganzen Canvas abdeckt
   const buffer = gl.createBuffer()
@@ -308,48 +354,56 @@ export function createPlanetRenderer(canvas: HTMLCanvasElement): PlanetRenderer 
 
   const surfaceTexture = gl.createTexture()
   const framebuffer = gl.createFramebuffer()
+  const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number
 
-  const flameTime = gl.getUniformLocation(flameProgram, 'uTime')
-  gl.useProgram(flameProgram)
-  gl.uniform1f(gl.getUniformLocation(flameProgram, 'uExtent'), EXTENT)
-  gl.uniform1i(gl.getUniformLocation(flameProgram, 'uSurface'), 0)
+  gl.useProgram(frameProgram)
+  const frameTime = gl.getUniformLocation(frameProgram, 'uTime')
+  const frameAngle = gl.getUniformLocation(frameProgram, 'uAngle')
+  const framePixel = gl.getUniformLocation(frameProgram, 'uPixel')
+  gl.uniform1f(gl.getUniformLocation(frameProgram, 'uExtent'), EXTENT)
+  gl.uniform1i(gl.getUniformLocation(frameProgram, 'uSurface'), 0)
 
   let size = 0
+  let textureWidth = 0
+
+  // Oberfläche einmalig in die Rundum-Textur rendern
+  const bake = (width: number) => {
+    textureWidth = width
+    const height = width / 2
+
+    gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, surfaceTexture, 0)
+    gl.viewport(0, 0, width, height)
+    gl.useProgram(bakeProgram)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  }
 
   return {
     resize(newSize) {
       if (newSize === size || newSize <= 0) return
       size = canvas.width = canvas.height = newSize
 
-      gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      const width = surfaceTextureWidth(size / EXTENT, maxTextureSize)
+      if (width !== textureWidth) bake(width)
 
-      // Oberfläche einmalig in die Textur rendern
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
-      gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        surfaceTexture,
-        0,
-      )
-      gl.viewport(0, 0, size, size)
-      gl.useProgram(surfaceProgram)
-      gl.uniform1f(gl.getUniformLocation(surfaceProgram, 'uExtent'), EXTENT)
-      gl.uniform1f(gl.getUniformLocation(surfaceProgram, 'uPixel'), (3 * EXTENT) / size)
-      gl.drawArrays(gl.TRIANGLES, 0, 3)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.useProgram(frameProgram)
+      gl.uniform1f(framePixel, (3 * EXTENT) / size)
     },
 
-    render(time) {
+    render(time, angle) {
       if (!size) return
       gl.viewport(0, 0, size, size)
-      gl.useProgram(flameProgram)
-      gl.uniform1f(flameTime, time)
+      gl.useProgram(frameProgram)
+      gl.uniform1f(frameTime, options.reducedMotion ? 0 : time)
+      gl.uniform1f(frameAngle, angle)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
@@ -359,8 +413,8 @@ export function createPlanetRenderer(canvas: HTMLCanvasElement): PlanetRenderer 
       gl.deleteTexture(surfaceTexture)
       gl.deleteFramebuffer(framebuffer)
       gl.deleteBuffer(buffer)
-      gl.deleteProgram(surfaceProgram)
-      gl.deleteProgram(flameProgram)
+      gl.deleteProgram(bakeProgram)
+      gl.deleteProgram(frameProgram)
     },
   }
 }
