@@ -51,6 +51,16 @@ const float PI = 3.14159265;
 const float TAU = 6.28318531;
 // Helligkeitsfaktor der Oberfläche liegt in 0..1.15 und wird für die Textur auf 0..1 gestaucht
 const float SHADE_SCALE = 1.15;
+// Wertebereich von surfaceHeight für die 16-Bit-Höhentextur (mit Reserve)
+const float HEIGHT_MIN = -0.6;
+const float HEIGHT_RANGE = 0.9;
+
+// Richtung auf der Kugel zu einer Position der Rundum-Textur (x = Länge, y = Breite)
+vec3 sphereDir(vec2 uv) {
+  float lon = (uv.x - 0.5) * TAU;
+  float lat = (uv.y - 0.5) * PI;
+  return vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
+}
 
 float hash13(vec3 p3) {
   p3 = fract(p3 * 0.1031);
@@ -184,21 +194,41 @@ float surfaceHeight(vec3 n) {
 }
 
 
-// Rundum-Textur: x = Länge, y = Breite. Gespeichert wird die fertige Normale (Objektkoordinaten)
-// und ein Helligkeitsfaktor aus Kraterhöhlen und Gesteinston.
+// Durchgang 1: nur die Höhe, mit 16 Bit auf R (grob) und G (fein) verteilt. surfaceHeight wird
+// hier genau einmal aufgerufen – drei Aufrufe ließen den Shader unter Windows (Direct3D)
+// sekundenlang kompilieren, weil jeder Aufruf mit allen Krater-Schleifen ausgerollt wird.
+void main() {
+  float hp = clamp((surfaceHeight(sphereDir(vUv)) - HEIGHT_MIN) / HEIGHT_RANGE, 0.0, 1.0);
+  gl_FragColor = vec4(floor(hp * 255.0) / 255.0, fract(hp * 255.0), 0.0, 1.0);
+}
+`
+
+// Durchgang 2: Rundum-Textur mit fertiger Normale (Objektkoordinaten) und Helligkeitsfaktor aus
+// Kraterhöhlen und Gesteinston. Die Normale kommt aus den Höhen der Nachbar-Texel.
+const NORMAL_SHADER = `
+uniform sampler2D uHeight;
+uniform vec2 uTexel;
+
+float heightAt(vec2 uv) {
+  vec4 t = texture2D(uHeight, uv);
+  return (t.r + t.g / 255.0) * HEIGHT_RANGE + HEIGHT_MIN;
+}
+
 void main() {
   float lon = (vUv.x - 0.5) * TAU;
   float lat = (vUv.y - 0.5) * PI;
-  vec3 n = vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
+  vec3 n = sphereDir(vUv);
+  vec3 east = vec3(cos(lon), 0.0, -sin(lon));
+  vec3 north = vec3(-sin(lat) * sin(lon), cos(lat), -sin(lat) * cos(lon));
 
-  // Oberflächen-Normale aus dem Höhenfeld (Krater werfen Licht und Schatten)
-  vec3 t1 = normalize(abs(n.y) < 0.99 ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0)));
-  vec3 t2 = cross(n, t1);
-  float eps = 0.003;
-  float h0 = surfaceHeight(n);
-  float h1 = surfaceHeight(normalize(n + t1 * eps));
-  float h2 = surfaceHeight(normalize(n + t2 * eps));
-  vec3 grad = t1 * (h1 - h0) / eps + t2 * (h2 - h0) / eps;
+  // Bogenlänge eines Texels nach Osten bzw. Norden (an den Polen begrenzt)
+  float stepEast = TAU * uTexel.x * max(cos(lat), 0.02);
+  float stepNorth = PI * uTexel.y;
+
+  float h0 = heightAt(vUv);
+  float dEast = heightAt(vUv + vec2(uTexel.x, 0.0)) - heightAt(vUv - vec2(uTexel.x, 0.0));
+  float dNorth = heightAt(vUv + vec2(0.0, uTexel.y)) - heightAt(vUv - vec2(0.0, uTexel.y));
+  vec3 grad = east * dEast / (2.0 * stepEast) + north * dNorth / (2.0 * stepNorth);
   vec3 N = normalize(n - grad * 0.38);
 
   float cavity = smoothstep(-0.12, 0.02, h0);
@@ -548,13 +578,14 @@ export function createPlanetRenderer(
   if (!gl) return null
 
   const bakeProgram = createProgram(gl, COMMON + BAKE_SHADER)
+  const normalProgram = createProgram(gl, COMMON + NORMAL_SHADER)
   const frameProgram = createProgram(gl, COMMON + FRAME_SHADER)
   const campProgram = createProgram(gl, CAMP_FRAGMENT_SHADER, CAMP_VERTEX_SHADER, [
     'aPosition',
     'aNormal',
     'aColor',
   ])
-  if (!bakeProgram || !frameProgram || !campProgram) return null
+  if (!bakeProgram || !normalProgram || !frameProgram || !campProgram) return null
 
   // Ein Dreieck, das den ganzen Canvas abdeckt
   const buffer = gl.createBuffer()
@@ -585,9 +616,14 @@ export function createPlanetRenderer(
     }
   }
 
+  const heightTexture = gl.createTexture()
   const surfaceTexture = gl.createTexture()
   const framebuffer = gl.createFramebuffer()
   const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number
+
+  gl.useProgram(normalProgram)
+  const normalTexel = gl.getUniformLocation(normalProgram, 'uTexel')
+  gl.uniform1i(gl.getUniformLocation(normalProgram, 'uHeight'), 0)
 
   gl.useProgram(frameProgram)
   const frameTime = gl.getUniformLocation(frameProgram, 'uTime')
@@ -608,14 +644,11 @@ export function createPlanetRenderer(
   let textureWidth = 0
   let textureHeight = 0
   let bakedRows = 0
+  let surfaceReady = false
 
-  // Rundum-Textur anlegen; gefüllt wird sie streifenweise in den nächsten Frames
-  const allocateSurface = (width: number) => {
-    textureWidth = width
-    textureHeight = width / 2
-    bakedRows = 0
-
-    gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
+  // Höhenwerte sind auf zwei Kanäle verteilt – nicht interpolieren, sonst stimmt das Entpacken nicht
+  const setupTexture = (texture: WebGLTexture | null, filter: number) => {
+    gl.bindTexture(gl.TEXTURE_2D, texture)
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
@@ -627,27 +660,51 @@ export function createPlanetRenderer(
       gl.UNSIGNED_BYTE,
       null,
     )
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
   }
 
-  // Ein Streifen der teuren Kraterlandschaft pro Frame – so blockiert schwache Handys
-  // kein einzelner riesiger Draw-Call (bis dahin bleibt der CSS-Planet sichtbar).
-  const bakeNextStrip = () => {
-    const strip = bakeStrip(bakedRows, textureHeight)
+  // Rundum-Texturen anlegen; gefüllt werden sie in den nächsten Frames
+  const allocateSurface = (width: number) => {
+    textureWidth = width
+    textureHeight = width / 2
+    bakedRows = 0
+    surfaceReady = false
+    setupTexture(heightTexture, gl.NEAREST)
+    setupTexture(surfaceTexture, gl.LINEAR)
+  }
+
+  const drawInto = (texture: WebGLTexture | null, program: WebGLProgram) => {
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, surfaceTexture, 0)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0)
     gl.viewport(0, 0, textureWidth, textureHeight)
-    gl.enable(gl.SCISSOR_TEST)
-    gl.scissor(0, strip.y, textureWidth, strip.height)
-    gl.useProgram(bakeProgram)
+    gl.useProgram(program)
     useFullscreenTriangle()
     gl.drawArrays(gl.TRIANGLES, 0, 3)
-    gl.disable(gl.SCISSOR_TEST)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  }
+
+  // Ein Streifen der teuren Kraterhöhen pro Frame – so blockiert schwache Handys kein
+  // einzelner riesiger Draw-Call (bis dahin bleibt der CSS-Planet sichtbar).
+  const bakeNextStrip = () => {
+    const strip = bakeStrip(bakedRows, textureHeight)
+    gl.enable(gl.SCISSOR_TEST)
+    gl.scissor(0, strip.y, textureWidth, strip.height)
+    drawInto(heightTexture, bakeProgram)
+    gl.disable(gl.SCISSOR_TEST)
     bakedRows = strip.y + strip.height
+  }
+
+  // Normalen aus den fertigen Höhen – billig, daher in einem Zug
+  const bakeNormals = () => {
+    gl.useProgram(normalProgram)
+    gl.uniform2f(normalTexel, 1 / textureWidth, 1 / textureHeight)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, heightTexture)
+    drawInto(surfaceTexture, normalProgram)
+    surfaceReady = true
   }
 
   return {
@@ -677,6 +734,7 @@ export function createPlanetRenderer(
         gl.clear(gl.COLOR_BUFFER_BIT)
         return
       }
+      if (!surfaceReady) bakeNormals()
 
       gl.viewport(0, 0, size, size)
       gl.useProgram(frameProgram)
@@ -698,11 +756,13 @@ export function createPlanetRenderer(
     },
 
     dispose() {
+      gl.deleteTexture(heightTexture)
       gl.deleteTexture(surfaceTexture)
       gl.deleteFramebuffer(framebuffer)
       gl.deleteBuffer(buffer)
       gl.deleteBuffer(campBuffer)
       gl.deleteProgram(bakeProgram)
+      gl.deleteProgram(normalProgram)
       gl.deleteProgram(frameProgram)
       gl.deleteProgram(campProgram)
     },
