@@ -60,7 +60,7 @@ const scene = computed<WeatherScene | null>(() => {
   return current ? { condition: current.condition, intensity: current.intensity } : null
 })
 
-export const isStale = (data: Weather, now: number): boolean =>
+export const isStale = (data: Pick<Weather, 'updatedAt'>, now: number): boolean =>
   now - Date.parse(data.updatedAt) > STALE_MS
 
 async function refresh(): Promise<void> {

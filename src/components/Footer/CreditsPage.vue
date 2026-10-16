@@ -26,7 +26,17 @@
       </section>
 
       <section>
-        <h2>3. Hinweise zur Nutzung</h2>
+        <h2>3. Wetterdaten</h2>
+        <p>
+          Wetterdaten von
+          <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer"
+            >Open-Meteo.com</a
+          >, lizenziert unter CC BY 4.0.
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Hinweise zur Nutzung</h2>
         <p>
           Alle verwendeten Medien werden unter Beachtung der jeweiligen Lizenzbedingungen
           eingesetzt. Sollte ein Rechteinhaber mit der Nutzung nicht einverstanden sein, bitten wir

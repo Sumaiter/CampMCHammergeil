@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { createPlanetRenderer, EXTENT } from './planetRenderer'
+import type { WeatherScene } from '@/api/types'
+
+defineProps<{ weather?: WeatherScene | null }>()
 
 // Höhere Pixeldichte bringt bei Flammen kaum etwas, kostet aber viel Leistung
 const MAX_PIXEL_RATIO = 1.5

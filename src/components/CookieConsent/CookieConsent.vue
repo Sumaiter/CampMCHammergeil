@@ -25,6 +25,7 @@
 
             <ul>
               <li>Speicherung deiner Cookie-Einstellungen (localStorage)</li>
+              <li>Zwischenspeicher für Wetterdaten und Einstellung „Effekte“ (localStorage)</li>
               <li>Website-Funktion (Vue Router Navigation)</li>
               <li>Sicherheits- und Performancefunktionen durch Cloudflare</li>
               <li>Login-Session-Cookie (nur nach Anmeldung)</li>

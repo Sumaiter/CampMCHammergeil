@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { RoutePath } from '@/router/routePath'
 import PlanetCanvas from './Planet/PlanetCanvas.vue'
+import WeatherStation from './Weather/WeatherStation.vue'
 import { useAuth } from '@/auth/useAuth'
+import { useWeather } from '@/weather/useWeather'
 
 const { user } = useAuth()
+const { scene } = useWeather()
 
 // Standard wäre alle 2 s ein Glitch – so nur kurz (~0,5 s) alle 8 s
 const glitchOptions = {
@@ -14,6 +17,9 @@ const glitchOptions = {
 
 <template>
   <header class="site-header">
+    <!-- 🌦️ WETTER NÜRBURGRING -->
+    <WeatherStation />
+
     <!-- 🛰️ LOGIN / KONTO -->
     <router-link
       :to="user ? RoutePath.Account : RoutePath.Login"
@@ -26,7 +32,7 @@ const glitchOptions = {
 
     <!-- 🌍 PLANET -->
     <router-link :to="RoutePath.Home" class="planet" aria-label="Camp MC Hammergeil – Startseite">
-      <PlanetCanvas />
+      <PlanetCanvas :weather="scene" />
 
       <span class="text-layer">
         <GlitchedElement :options="glitchOptions">
@@ -120,7 +126,6 @@ const glitchOptions = {
   );
   box-shadow: 0 0 60px rgba(120, 255, 200, 0.15);
 
-  animation: float 6s ease-in-out infinite;
   transition: box-shadow 0.3s ease;
 
   &:hover {
@@ -167,17 +172,6 @@ const glitchOptions = {
 
   .mobile-break {
     display: inline;
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-12px);
   }
 }
 

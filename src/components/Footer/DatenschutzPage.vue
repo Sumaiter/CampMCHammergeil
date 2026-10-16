@@ -100,7 +100,21 @@
       </section>
 
       <section>
-        <h2>6. Kontaktaufnahme</h2>
+        <h2>6. Wetterdaten</h2>
+        <p>
+          Für die Wetteranzeige ruft unser Server das Wetter am Nürburgring bei
+          <strong>Open-Meteo</strong> (open-meteo.com) ab. Dein Browser spricht dabei nur mit
+          unserem Server; an Open-Meteo werden keine Daten über dich übermittelt.
+        </p>
+        <p>
+          Die zuletzt geladenen Wetterdaten und deine Einstellung zu den Wettereffekten werden im
+          localStorage deines Browsers gespeichert, damit das Wetter auch bei schlechtem Netz sofort
+          angezeigt wird. Diese Daten verlassen dein Gerät nicht.
+        </p>
+      </section>
+
+      <section>
+        <h2>7. Kontaktaufnahme</h2>
         <p>
           Wenn du uns per E-Mail kontaktierst, werden deine Angaben zur Bearbeitung der Anfrage
           gespeichert. Diese Daten geben wir nicht ohne deine Einwilligung weiter.
@@ -108,7 +122,7 @@
       </section>
 
       <section>
-        <h2>7. Cookies</h2>
+        <h2>8. Cookies</h2>
         <p>
           Diese Website verwendet in der Regel keine Cookies zur Nutzerverfolgung. Falls Cookies
           eingesetzt werden, dienen sie ausschließlich der technischen Funktionalität.
@@ -121,7 +135,7 @@
       </section>
 
       <section>
-        <h2>8. Analyse-Tools</h2>
+        <h2>9. Analyse-Tools</h2>
         <p>
           Falls Analyse-Tools (z. B. Google Analytics) eingesetzt werden, erfolgt dies nur mit
           deiner Einwilligung. Aktuell werden keine Tracking-Tools verwendet.
@@ -129,7 +143,7 @@
       </section>
 
       <section>
-        <h2>9. Deine Rechte</h2>
+        <h2>10. Deine Rechte</h2>
         <p>Du hast jederzeit das Recht auf:</p>
         <ul>
           <li>Auskunft über gespeicherte Daten</li>
@@ -141,7 +155,7 @@
       </section>
 
       <section>
-        <h2>10. Widerruf deiner Einwilligung</h2>
+        <h2>11. Widerruf deiner Einwilligung</h2>
         <p>
           Du kannst eine bereits erteilte Einwilligung jederzeit widerrufen. Dazu reicht eine
           formlose Mitteilung per E-Mail.
@@ -149,7 +163,7 @@
       </section>
 
       <section>
-        <h2>11. Änderungen</h2>
+        <h2>12. Änderungen</h2>
         <p>
           Wir behalten uns vor, diese Datenschutzerklärung anzupassen, damit sie stets den aktuellen
           rechtlichen Anforderungen entspricht.
