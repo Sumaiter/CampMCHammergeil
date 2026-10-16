@@ -4,6 +4,8 @@
 // Rundum-Textur (equirektangulär: Normale + Helligkeit) gebacken. Pro Frame wird diese Textur
 // gedreht auf die Kugel gelegt und beleuchtet, dazu kommen die Flammen.
 
+import { buildCampMesh, FLOATS_PER_VERTEX } from './campMesh'
+
 // Canvas ist EXTENT-mal so breit wie der Planet, damit die Flammen Platz haben.
 export const EXTENT = 1.9
 
@@ -304,6 +306,50 @@ void main() {
 }
 `
 
+// Zelte und Pavillon: kleine Dreiecksmodelle, gleiche Drehung und Projektion wie die Kugel
+const CAMP_VERTEX_SHADER = `
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+attribute vec3 aColor;
+uniform float uAngle;
+uniform float uExtent;
+varying vec3 vPosition;
+varying vec3 vNormal;
+varying vec3 vColor;
+
+vec3 rotateY(vec3 v, float a) {
+  float c = cos(a);
+  float s = sin(a);
+  return vec3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
+}
+
+void main() {
+  vPosition = rotateY(aPosition, uAngle);
+  vNormal = rotateY(aNormal, uAngle);
+  vColor = aColor;
+  // orthografisch wie die Kugel; näher am Betrachter (größeres z) = kleinere Tiefe
+  gl_Position = vec4(vPosition.xy / uExtent, -vPosition.z * 0.5, 1.0);
+}
+`
+
+const CAMP_FRAGMENT_SHADER = `
+precision mediump float;
+varying vec3 vPosition;
+varying vec3 vNormal;
+varying vec3 vColor;
+
+void main() {
+  // Hinter der Kugel? Dann verdeckt der Planet das Zelt.
+  float r2 = dot(vPosition.xy, vPosition.xy);
+  if (r2 < 1.0 && vPosition.z < sqrt(1.0 - r2)) discard;
+
+  vec3 light = normalize(vec3(-0.35, 0.55, 0.8));
+  float diffuse = max(dot(normalize(vNormal), light), 0.0);
+  vec3 col = vColor * (0.3 + 0.75 * diffuse) + vec3(0.02, 0.08, 0.05);
+  gl_FragColor = vec4(col, 1.0);
+}
+`
+
 export interface PlanetRenderer {
   resize(size: number): void
   // time treibt Flammen & Co. (bei reducedMotion eingefroren), angle (Radiant) die Drehung
@@ -322,7 +368,12 @@ function surfaceTextureWidth(planetPixels: number, maxTextureSize: number): numb
   return Math.min(width, maxTextureSize)
 }
 
-function createProgram(gl: WebGLRenderingContext, fragmentSource: string) {
+function createProgram(
+  gl: WebGLRenderingContext,
+  fragmentSource: string,
+  vertexSource = VERTEX_SHADER,
+  attributes = ['aPos'],
+) {
   const compile = (type: number, source: string) => {
     const shader = gl.createShader(type)
     if (!shader) return null
@@ -336,14 +387,14 @@ function createProgram(gl: WebGLRenderingContext, fragmentSource: string) {
     return shader
   }
 
-  const vertex = compile(gl.VERTEX_SHADER, VERTEX_SHADER)
-  const fragment = compile(gl.FRAGMENT_SHADER, COMMON + fragmentSource)
+  const vertex = compile(gl.VERTEX_SHADER, vertexSource)
+  const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource)
   const program = gl.createProgram()
   if (!vertex || !fragment || !program) return null
 
   gl.attachShader(program, vertex)
   gl.attachShader(program, fragment)
-  gl.bindAttribLocation(program, 0, 'aPos')
+  attributes.forEach((name, location) => gl.bindAttribLocation(program, location, name))
   gl.linkProgram(program)
   gl.deleteShader(vertex)
   gl.deleteShader(fragment)
@@ -360,19 +411,51 @@ export function createPlanetRenderer(
   canvas: HTMLCanvasElement,
   options: PlanetRendererOptions,
 ): PlanetRenderer | null {
-  const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false })
+  const gl = canvas.getContext('webgl', {
+    alpha: true,
+    premultipliedAlpha: true,
+    antialias: false,
+    depth: true, // für die Zelte untereinander
+  })
   if (!gl) return null
 
-  const bakeProgram = createProgram(gl, BAKE_SHADER)
-  const frameProgram = createProgram(gl, FRAME_SHADER)
-  if (!bakeProgram || !frameProgram) return null
+  const bakeProgram = createProgram(gl, COMMON + BAKE_SHADER)
+  const frameProgram = createProgram(gl, COMMON + FRAME_SHADER)
+  const campProgram = createProgram(gl, CAMP_FRAGMENT_SHADER, CAMP_VERTEX_SHADER, [
+    'aPosition',
+    'aNormal',
+    'aColor',
+  ])
+  if (!bakeProgram || !frameProgram || !campProgram) return null
 
   // Ein Dreieck, das den ganzen Canvas abdeckt
   const buffer = gl.createBuffer()
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
-  gl.enableVertexAttribArray(0)
-  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+
+  const campMesh = buildCampMesh()
+  const campVertices = campMesh.length / FLOATS_PER_VERTEX
+  const campBuffer = gl.createBuffer()
+  gl.bindBuffer(gl.ARRAY_BUFFER, campBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, campMesh, gl.STATIC_DRAW)
+
+  // WebGL 1 hat keine Vertex Arrays – Attribute vor jedem Zeichnen neu setzen
+  const useFullscreenTriangle = () => {
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+    gl.disableVertexAttribArray(1)
+    gl.disableVertexAttribArray(2)
+  }
+
+  const useCampMesh = () => {
+    const stride = FLOATS_PER_VERTEX * 4
+    gl.bindBuffer(gl.ARRAY_BUFFER, campBuffer)
+    for (let i = 0; i < 3; i++) {
+      gl.enableVertexAttribArray(i)
+      gl.vertexAttribPointer(i, 3, gl.FLOAT, false, stride, i * 12)
+    }
+  }
 
   const surfaceTexture = gl.createTexture()
   const framebuffer = gl.createFramebuffer()
@@ -384,6 +467,10 @@ export function createPlanetRenderer(
   const framePixel = gl.getUniformLocation(frameProgram, 'uPixel')
   gl.uniform1f(gl.getUniformLocation(frameProgram, 'uExtent'), EXTENT)
   gl.uniform1i(gl.getUniformLocation(frameProgram, 'uSurface'), 0)
+
+  gl.useProgram(campProgram)
+  const campAngle = gl.getUniformLocation(campProgram, 'uAngle')
+  gl.uniform1f(gl.getUniformLocation(campProgram, 'uExtent'), EXTENT)
 
   let size = 0
   let textureWidth = 0
@@ -404,6 +491,7 @@ export function createPlanetRenderer(
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, surfaceTexture, 0)
     gl.viewport(0, 0, width, height)
     gl.useProgram(bakeProgram)
+    useFullscreenTriangle()
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
@@ -428,15 +516,26 @@ export function createPlanetRenderer(
       gl.uniform1f(frameAngle, angle)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
+      useFullscreenTriangle()
       gl.drawArrays(gl.TRIANGLES, 0, 3)
+
+      gl.useProgram(campProgram)
+      gl.uniform1f(campAngle, angle)
+      useCampMesh()
+      gl.clear(gl.DEPTH_BUFFER_BIT)
+      gl.enable(gl.DEPTH_TEST)
+      gl.drawArrays(gl.TRIANGLES, 0, campVertices)
+      gl.disable(gl.DEPTH_TEST)
     },
 
     dispose() {
       gl.deleteTexture(surfaceTexture)
       gl.deleteFramebuffer(framebuffer)
       gl.deleteBuffer(buffer)
+      gl.deleteBuffer(campBuffer)
       gl.deleteProgram(bakeProgram)
       gl.deleteProgram(frameProgram)
+      gl.deleteProgram(campProgram)
     },
   }
 }
