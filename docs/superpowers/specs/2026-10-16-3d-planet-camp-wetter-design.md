@@ -29,14 +29,15 @@ Weiterhin reines WebGL 1, Vollbild-Dreieck, ein Canvas (`EXTENT`-mal so groß wi
 
 - Die teure Kraterlandschaft (`surfaceHeight`, unverändert inkl. Überlappungsregeln) wird **einmalig** in eine
   equirektanguläre Textur gerendert (Breite = 2 × Höhe, z. B. 1024 × 512, an Pixeldichte gekoppelt, max. 2048 × 1024).
-  Kanäle: R/G = Höhe (16 bit verteilt auf zwei Kanäle), B = Ton (`fbm`-Färbung), A = Höhlenfaktor (cavity).
+  Kanäle: RGB = fertige Oberflächen-Normale (Objektkoordinaten), A = Helligkeitsfaktor aus Höhlen und Ton –
+  so bleibt lineare Texturfilterung korrekt und pro Frame genügt ein Texturzugriff.
 - Neu gebacken wird nur, wenn sich die Texturgröße ändert – nicht bei jedem Resize um ein paar Pixel.
 
 ### Pro Frame
 
 - Für jeden Pixel innerhalb der Kugel: Normale `n` aus der Bildschirmposition, um die y-Achse um
   `angle = time * ROTATION_SPEED` zurückgedreht → Länge/Breite → Textur lesen.
-- Oberflächen-Normale aus Höhendifferenzen benachbarter Texel (statt drei `surfaceHeight`-Aufrufen).
+- Oberflächen-Normale direkt aus der Textur (mit dem Planeten mitgedreht) statt drei `surfaceHeight`-Aufrufen.
 - Licht bleibt fest (oben links, wie heute), Farbgebung/Atmosphäre/Unterseiten-Abdunklung wie bisher.
 - `ROTATION_SPEED`: eine Umdrehung ca. alle 60 s.
 
