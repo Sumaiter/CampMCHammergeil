@@ -209,6 +209,7 @@ onUnmounted(() => {
   margin-top: 6px;
   padding: 0.75rem 1rem;
   min-width: 15rem;
+  background: var(--c-surface-strong); // deckend, sonst scheinen Schriftzug und Flammen durch
 
   ul {
     margin: 0;
@@ -242,6 +243,78 @@ onUnmounted(() => {
 .forecast-empty {
   margin: 0;
   color: var(--c-text-muted);
+}
+
+/* 📱 MOBILE: kompakter und mit eigenem Hintergrund, damit die Station vor den Flammen lesbar bleibt */
+@media (max-width: 600px) {
+  .weather-station {
+    gap: 2px;
+    padding: 4px 6px 6px;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-sm);
+    background: var(--c-surface-strong);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: var(--shadow-card);
+  }
+
+  .station {
+    padding: 2px 4px;
+
+    .station-icon {
+      font-size: 1.4rem;
+    }
+
+    .station-temp {
+      font-size: 0.85rem;
+    }
+
+    .station-label {
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+    }
+
+    .station-stale {
+      font-size: 0.55rem;
+    }
+  }
+
+  .effects-switch {
+    gap: 4px;
+    padding: 2px;
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+
+    .switch-track {
+      width: 22px;
+      height: 12px;
+    }
+
+    .switch-thumb {
+      width: 8px;
+      height: 8px;
+    }
+
+    &[aria-checked='true'] .switch-thumb {
+      transform: translateX(10px);
+    }
+  }
+
+  .forecast {
+    padding: 0.5rem 0.75rem;
+    min-width: 13rem;
+
+    li {
+      grid-template-columns: 2.8rem 1.4rem 1fr auto;
+      gap: 0.3rem;
+      padding: 0.2rem 0;
+      font-size: 0.8rem;
+    }
+
+    .rain {
+      font-size: 0.72rem;
+    }
+  }
 }
 
 .fade-enter-active,
