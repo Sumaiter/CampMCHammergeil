@@ -237,10 +237,29 @@ vec4 planet(vec2 p, float r) {
   return vec4(col * alpha, alpha);
 }
 
+// Richtung zum Camp in Objektkoordinaten (35° nördliche Breite, Länge 0 – siehe campMesh.ts)
+const vec3 CAMP_DIR = vec3(0.0, 0.573576, 0.819152);
+
+// 0 direkt am Camp, 1 ab ~18° Abstand: dort lodern keine Flammen
+float campClearance(vec3 obj) {
+  return 1.0 - smoothstep(0.951057, 0.978148, dot(obj, CAMP_DIR));
+}
+
+// Dünnes Lodern auf der Vorderseite: hängt an der Oberfläche und züngelt nach oben.
+// Zur Mitte hin (hinter dem Schriftzug) schwächer, damit die Schrift lesbar bleibt.
+float surfaceFlames(vec2 p, float r) {
+  if (r >= 1.0) return 0.0;
+  vec3 obj = rotateY(vec3(p, sqrt(1.0 - r * r)), -uAngle);
+  // senkrecht gestreckt -> schmale Zungen, die nach oben wandern
+  float lick = fbm(vec3(obj.x * 7.0, obj.y * 2.5 - uTime * 0.6, obj.z * 7.0));
+  return smoothstep(0.55, 0.72, lick) * 0.45 * smoothstep(0.35, 0.95, r) * campClearance(obj);
+}
+
 void main() {
   vec2 p = planetCoord();
   float r = length(p);
   vec4 surface = planet(p, r);
+  surface.rgb += vec3(0.12, 0.92, 0.55) * surfaceFlames(p, r) * surface.a;
 
   if (r < 0.85) {
     gl_FragColor = surface;
@@ -254,8 +273,11 @@ void main() {
   vec2 dir = p / r;
   float d = max(r - 1.0, 0.0);
 
-  // Flammen steigen vor allem aus der oberen Hälfte auf
-  float up = 0.2 + 0.9 * smoothstep(-0.7, 1.0, dir.y);
+  // Flammen steigen vor allem aus der oberen Hälfte auf. Wie hoch sie schlagen, hängt an der
+  // Stelle des Planeten, die gerade am Rand steht – so drehen die Flammenherde mit.
+  vec3 limb = rotateY(vec3(dir, 0.0), -uAngle);
+  float strength = (0.55 + 0.9 * fbm(limb * 2.2 + 5.0)) * campClearance(limb);
+  float up = (0.2 + 0.9 * smoothstep(-0.7, 1.0, dir.y)) * strength;
   float edgeFade = 1.0 - smoothstep(uExtent - 0.4, uExtent, r);
 
   // Rauschen ist in Umfangsrichtung feiner als nach außen -> lange Flammenzungen,
