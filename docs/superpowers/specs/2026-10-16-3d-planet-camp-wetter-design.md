@@ -15,7 +15,9 @@
 
 - Wird am Handy während Rock am Ring mit schlechtem Netz genutzt (~10 Nutzer): **wenig Daten, flüssig am Handy**.
 - Keine neue Bibliothek (kein Three.js), keine Bilder/Modelle zum Nachladen – alles im bestehenden WebGL-Renderer.
-- `prefers-reduced-motion`: keine Drehung, keine Animation; Planet steht so, dass das Camp vorne sichtbar ist.
+- Der Planet dreht sich **immer** langsam (ca. 1 Umdrehung pro Minute), auch bei `prefers-reduced-motion`.
+  Pausiert wird nur, solange er aus dem Bild gescrollt ist. Bei `prefers-reduced-motion` entfallen
+  Flammen-Flackern, Tropfen/Flocken und Blitze (Flammen stehen still, drehen aber mit).
 - Ohne WebGL bleibt der bisherige CSS-Farbverlauf als Fallback; die Wetterstation funktioniert trotzdem.
 - Dev-Server läuft auf Port 5180.
 
@@ -69,7 +71,7 @@ Weiterhin reines WebGL 1, Vollbild-Dreieck, ein Canvas (`EXTENT`-mal so groß wi
 | Schnee | Wolken + langsam fallende, leicht pendelnde Flocken |
 | Gewitter | wie starker Regen + gelegentliches Blitz-Aufhellen (alle paar Sekunden zufällig) |
 
-Bei `uEffects = 0` oder ohne Wetterdaten: Zustand „klar“. Bei `prefers-reduced-motion`: Wolken/Nebel statisch, keine Tropfen/Blitze.
+Bei `uEffects = 0` oder ohne Wetterdaten: Zustand „klar“. Bei `prefers-reduced-motion`: Wolken/Nebel drehen nur mit dem Planeten mit, keine Tropfen/Flocken/Blitze.
 
 ### Schnittstelle
 
