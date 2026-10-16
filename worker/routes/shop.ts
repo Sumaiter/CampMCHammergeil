@@ -30,6 +30,8 @@ const LIST_NOT_FOUND = 'Liste nicht gefunden'
 const NO_OPEN_ORDERS = 'Keine offenen Bestellungen'
 const MAX_PRICE_CENTS = 1_000_000
 const MAX_QUANTITY = 999
+// D1 erlaubt höchstens 100 gebundene Parameter pro Abfrage (siehe Artikelprüfung beim Bestellen).
+const MAX_ORDER_LINES = 100
 
 // Gemeinsame Abfrage für Bestellpositionen. Preis: beim Drucken festgeschrieben, sonst aktueller Artikelpreis.
 const ORDER_SELECT = `
@@ -207,6 +209,9 @@ shopRoutes.post('/orders', requireUser, async (c) => {
 
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HttpError(400, 'Keine Artikel ausgewählt')
+  }
+  if (body.items.length > MAX_ORDER_LINES) {
+    throw new HttpError(400, `Höchstens ${MAX_ORDER_LINES} Artikel pro Bestellung`)
   }
 
   const lines: Array<{ itemId: number; quantity: number }> = []

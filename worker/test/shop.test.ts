@@ -357,6 +357,13 @@ describe('/api/shop', () => {
       expect(await listOrders()).toEqual([])
     })
 
+    it('lehnt mehr als 100 Positionen in einer Bestellung mit 400 ab', async () => {
+      const items = Array.from({ length: 101 }, (_, i) => ({ itemId: i + 1, quantity: 1 }))
+      const res = await order(items)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ error: 'Höchstens 100 Artikel pro Bestellung' })
+    })
+
     it('akzeptiert die Mengen 1 und 999', async () => {
       const res = await order([
         { itemId: cola.id, quantity: 999 },
