@@ -59,3 +59,21 @@ export type ShopBalance = {
   totalCents: number
   unpricedCount: number
 }
+
+// Wetter am Nürburgring (GET /api/weather). Temperaturen in °C.
+export type WeatherCondition = 'clear' | 'cloudy' | 'fog' | 'rain' | 'snow' | 'storm'
+
+// Was der Planet darstellt; intensity 0..1.
+export type WeatherScene = { condition: WeatherCondition; intensity: number }
+
+export type Weather = {
+  current: WeatherScene & { temperature: number; isDay: boolean; windKmh: number }
+  daily: {
+    date: string
+    condition: WeatherCondition
+    max: number
+    min: number
+    rainChance: number | null
+  }[]
+  updatedAt: string // ISO, Zeitpunkt der Abfrage bei Open-Meteo
+}
