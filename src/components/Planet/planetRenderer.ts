@@ -10,8 +10,22 @@ import { buildCampMesh, FLOATS_PER_VERTEX } from './campMesh'
 // Canvas ist EXTENT-mal so breit wie der Planet, damit die Flammen Platz haben.
 export const EXTENT = 1.9
 
-// Sekunden für eine Umdrehung um die senkrechte Achse
-export const ROTATION_PERIOD = 60
+// Sekunden für eine Umdrehung um die senkrechte Achse; Wolken sind etwas langsamer
+const ROTATION_PERIOD = 60
+const CLOUD_PERIOD = ROTATION_PERIOD / 0.8
+
+export type RotationAngles = { planet: number; clouds: number }
+
+// Drehwinkel (Radiant) – jeder läuft mit seiner eigenen Periode über, damit nichts springt
+export function rotationAngles(seconds: number): RotationAngles {
+  const turn = (period: number) => ((seconds % period) / period) * 2 * Math.PI
+  return { planet: turn(ROTATION_PERIOD), clouds: turn(CLOUD_PERIOD) }
+}
+
+// Zeilen der Rundum-Textur, die als Nächstes gebacken werden (8 Streifen)
+export function bakeStrip(done: number, height: number): { y: number; height: number } {
+  return { y: done, height: Math.min(Math.ceil(height / 8), height - done) }
+}
 
 const VERTEX_SHADER = `
 attribute vec2 aPos;
@@ -198,6 +212,7 @@ void main() {
 const FRAME_SHADER = `
 uniform float uTime;
 uniform float uAngle;
+uniform float uCloudAngle;
 uniform float uPixel;
 uniform sampler2D uSurface;
 // Wetter: 0 klar, 1 bewölkt, 2 Nebel, 3 Regen, 4 Schnee, 5 Gewitter; Stärke 0..1
@@ -283,8 +298,8 @@ vec4 weatherOnSurface(vec4 surface, vec2 p, float r) {
 
   float cover = cloudCover();
   if (cover > 0.0) {
-    vec3 obj = rotateY(n, -uAngle * 0.8);
-    float c = fbm(obj * vec3(2.2, 4.0, 2.2) + vec3(uTime * 0.02, 0.0, 0.0)); // flach gestreckte Bänder
+    vec3 obj = rotateY(n, -uCloudAngle);
+    float c = fbm(obj * vec3(2.2, 4.0, 2.2)); // flach gestreckte Bänder
     float density = smoothstep(0.55 - 0.2 * cover, 0.72, c) * (0.4 + 0.4 * cover);
     vec3 cloud = uWeather > 2.5 ? vec3(0.5, 0.56, 0.55) : vec3(0.95, 0.98, 0.97);
     cloud *= 0.55 + 0.45 * max(dot(n, LIGHT), 0.0) + lightning() * 0.8;
@@ -454,7 +469,7 @@ void main() {
 export interface PlanetRenderer {
   resize(size: number): void
   // time treibt Flammen & Co. (bei reducedMotion eingefroren), angle (Radiant) die Drehung
-  render(time: number, angle: number): void
+  render(time: number, angles: RotationAngles): void
   // null = keine Wettereffekte
   setWeather(scene: WeatherScene | null): void
   dispose(): void
@@ -577,6 +592,7 @@ export function createPlanetRenderer(
   gl.useProgram(frameProgram)
   const frameTime = gl.getUniformLocation(frameProgram, 'uTime')
   const frameAngle = gl.getUniformLocation(frameProgram, 'uAngle')
+  const frameCloudAngle = gl.getUniformLocation(frameProgram, 'uCloudAngle')
   const framePixel = gl.getUniformLocation(frameProgram, 'uPixel')
   const frameWeather = gl.getUniformLocation(frameProgram, 'uWeather')
   const frameIntensity = gl.getUniformLocation(frameProgram, 'uIntensity')
@@ -590,26 +606,48 @@ export function createPlanetRenderer(
 
   let size = 0
   let textureWidth = 0
+  let textureHeight = 0
+  let bakedRows = 0
 
-  // Oberfläche einmalig in die Rundum-Textur rendern
-  const bake = (width: number) => {
+  // Rundum-Textur anlegen; gefüllt wird sie streifenweise in den nächsten Frames
+  const allocateSurface = (width: number) => {
     textureWidth = width
-    const height = width / 2
+    textureHeight = width / 2
+    bakedRows = 0
 
     gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      textureWidth,
+      textureHeight,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      null,
+    )
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  }
 
+  // Ein Streifen der teuren Kraterlandschaft pro Frame – so blockiert schwache Handys
+  // kein einzelner riesiger Draw-Call (bis dahin bleibt der CSS-Planet sichtbar).
+  const bakeNextStrip = () => {
+    const strip = bakeStrip(bakedRows, textureHeight)
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, surfaceTexture, 0)
-    gl.viewport(0, 0, width, height)
+    gl.viewport(0, 0, textureWidth, textureHeight)
+    gl.enable(gl.SCISSOR_TEST)
+    gl.scissor(0, strip.y, textureWidth, strip.height)
     gl.useProgram(bakeProgram)
     useFullscreenTriangle()
     gl.drawArrays(gl.TRIANGLES, 0, 3)
+    gl.disable(gl.SCISSOR_TEST)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    bakedRows = strip.y + strip.height
   }
 
   return {
@@ -618,7 +656,7 @@ export function createPlanetRenderer(
       size = canvas.width = canvas.height = newSize
 
       const width = surfaceTextureWidth(size / EXTENT, maxTextureSize)
-      if (width !== textureWidth) bake(width)
+      if (width !== textureWidth) allocateSurface(width)
 
       gl.useProgram(frameProgram)
       gl.uniform1f(framePixel, (3 * EXTENT) / size)
@@ -630,19 +668,28 @@ export function createPlanetRenderer(
       gl.uniform1f(frameIntensity, scene?.intensity ?? 0)
     },
 
-    render(time, angle) {
+    render(time, angles) {
       if (!size) return
+      if (bakedRows < textureHeight) {
+        bakeNextStrip()
+        gl.viewport(0, 0, size, size)
+        gl.clearColor(0, 0, 0, 0)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+        return
+      }
+
       gl.viewport(0, 0, size, size)
       gl.useProgram(frameProgram)
       gl.uniform1f(frameTime, options.reducedMotion ? 0 : time)
-      gl.uniform1f(frameAngle, angle)
+      gl.uniform1f(frameAngle, angles.planet)
+      gl.uniform1f(frameCloudAngle, angles.clouds)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, surfaceTexture)
       useFullscreenTriangle()
       gl.drawArrays(gl.TRIANGLES, 0, 3)
 
       gl.useProgram(campProgram)
-      gl.uniform1f(campAngle, angle)
+      gl.uniform1f(campAngle, angles.planet)
       useCampMesh()
       gl.clear(gl.DEPTH_BUFFER_BIT)
       gl.enable(gl.DEPTH_TEST)

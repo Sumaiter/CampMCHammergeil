@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { createPlanetRenderer, EXTENT, ROTATION_PERIOD } from './planetRenderer'
+import { createPlanetRenderer, EXTENT, rotationAngles } from './planetRenderer'
 import type { WeatherScene } from '@/api/types'
 
 // Wetter-Effekte in der Szene; null = keine
@@ -46,8 +46,7 @@ onMounted(() => {
 
   const draw = () => {
     const seconds = (performance.now() - start) / 1000
-    const angle = ((seconds % ROTATION_PERIOD) / ROTATION_PERIOD) * 2 * Math.PI
-    renderer.render(seconds % TIME_WRAP_SECONDS, angle)
+    renderer.render(seconds % TIME_WRAP_SECONDS, rotationAngles(seconds))
     if (visible) frame = requestAnimationFrame(draw)
   }
 
