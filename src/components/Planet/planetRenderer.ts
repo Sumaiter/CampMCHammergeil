@@ -5,7 +5,7 @@
 // gedreht auf die Kugel gelegt und beleuchtet, dazu kommen die Flammen.
 
 import type { WeatherCondition, WeatherScene } from '@/api/types'
-import { buildCampMesh, FLOATS_PER_VERTEX } from './campMesh'
+import { buildCampMesh, FLOATS_PER_VERTEX, STAGE_DIR } from './campMesh'
 
 // Canvas ist EXTENT-mal so breit wie der Planet, damit die Flammen Platz haben.
 export const EXTENT = 1.9
@@ -239,17 +239,20 @@ void main() {
 }
 `
 
-const FRAME_SHADER = `
+// Gemeinsam für Planeten-Pass und Wetter-Pass: Uniforms, Drehung, Wolkendichte
+const WEATHER_COMMON = `
 uniform float uTime;
-uniform float uAngle;
 uniform float uCloudAngle;
 uniform float uPixel;
-uniform sampler2D uSurface;
 // Wetter: 0 klar, 1 bewölkt, 2 Nebel, 3 Regen, 4 Schnee, 5 Gewitter; Stärke 0..1
 uniform float uWeather;
 uniform float uIntensity;
 // 0 bei prefers-reduced-motion: kein Niederschlag, keine Blitze
 uniform float uMotion;
+
+const vec3 LIGHT = vec3(-0.3487, 0.5480, 0.7971); // normalize(-0.35, 0.55, 0.8)
+// Wolken schweben in einer Hülle über der Oberfläche (Planetenradius 1)
+const float CLOUD_RADIUS = 1.06;
 
 // Dreht um die senkrechte Achse; positive Winkel schieben die Vorderseite nach rechts
 vec3 rotateY(vec3 v, float a) {
@@ -257,6 +260,36 @@ vec3 rotateY(vec3 v, float a) {
   float s = sin(a);
   return vec3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
 }
+
+bool isWeather(float id) {
+  return abs(uWeather - id) < 0.5;
+}
+
+float cloudCover() {
+  if (isWeather(1.0)) return uIntensity;
+  if (uWeather > 2.5) return 0.5 + 0.5 * uIntensity; // Regen, Schnee, Gewitter
+  return 0.0;
+}
+
+// Dichte der Wolkendecke an einer Richtung im mitdrehenden Wolken-System
+float cloudDensity(vec3 obj, float cover) {
+  float c = fbm(obj * vec3(2.2, 4.0, 2.2)); // flach gestreckte Bänder
+  return smoothstep(0.55 - 0.2 * cover, 0.72, c) * (0.4 + 0.4 * cover);
+}
+
+// Blitz: zufällig in manchen halben Sekunden, schnell abklingend
+float lightning() {
+  if (!isWeather(5.0) || uMotion < 0.5) return 0.0;
+  float slot = floor(uTime * 2.0);
+  float strike = step(0.93, hash13(vec3(slot, 3.1, 7.7)));
+  float decay = 1.0 - fract(uTime * 2.0);
+  return strike * decay * decay;
+}
+`
+
+const FRAME_SHADER = `
+uniform float uAngle;
+uniform sampler2D uSurface;
 
 // Beleuchtete Kugel (vormultipliziertes RGBA)
 vec4 planet(vec2 p, float r) {
@@ -292,105 +325,36 @@ vec4 planet(vec2 p, float r) {
 
 // Richtung zum Camp in Objektkoordinaten (35° nördliche Breite, Länge 0 – siehe campMesh.ts)
 const vec3 CAMP_DIR = vec3(0.0, 0.573576, 0.819152);
+// Richtung zur Bühne (etwas südöstlich des Camps)
+const vec3 STAGE_DIR = vec3(${STAGE_DIR.map((x) => x.toFixed(6)).join(', ')});
 
-// 0 direkt am Camp, 1 ab ~18° Abstand: dort lodern keine Flammen
+// 0 direkt am Camp oder an der Bühne, 1 ab ~18° Abstand: dort lodern keine Flammen
 float campClearance(vec3 obj) {
-  return 1.0 - smoothstep(0.951057, 0.978148, dot(obj, CAMP_DIR));
+  float near = max(dot(obj, CAMP_DIR), dot(obj, STAGE_DIR));
+  return 1.0 - smoothstep(0.951057, 0.978148, near);
 }
 
 // ---------- Wetter am Nürburgring ----------
 
-const vec3 LIGHT = vec3(-0.3487, 0.5480, 0.7971); // normalize(-0.35, 0.55, 0.8)
-
-bool isWeather(float id) {
-  return abs(uWeather - id) < 0.5;
-}
-
-float cloudCover() {
-  if (isWeather(1.0)) return uIntensity;
-  if (uWeather > 2.5) return 0.5 + 0.5 * uIntensity; // Regen, Schnee, Gewitter
-  return 0.0;
-}
-
-// Blitz: zufällig in manchen halben Sekunden, schnell abklingend
-float lightning() {
-  if (!isWeather(5.0) || uMotion < 0.5) return 0.0;
-  float slot = floor(uTime * 2.0);
-  float strike = step(0.93, hash13(vec3(slot, 3.1, 7.7)));
-  float decay = 1.0 - fract(uTime * 2.0);
-  return strike * decay * decay;
-}
-
-// Wolken und Nebel liegen auf der Kugel; Wolken drehen etwas langsamer als der Planet
+// Wolkenschatten und Nebel auf der Kugel; die Wolken selbst zeichnet der Wetter-Pass darüber
 vec4 weatherOnSurface(vec4 surface, vec2 p, float r) {
   if (surface.a <= 0.0 || r >= 1.0) return surface;
   vec3 n = vec3(p, sqrt(1.0 - r * r));
 
   float cover = cloudCover();
   if (cover > 0.0) {
-    vec3 obj = rotateY(n, -uCloudAngle);
-    float c = fbm(obj * vec3(2.2, 4.0, 2.2)); // flach gestreckte Bänder
-    float density = smoothstep(0.55 - 0.2 * cover, 0.72, c) * (0.4 + 0.4 * cover);
-    vec3 cloud = uWeather > 2.5 ? vec3(0.5, 0.56, 0.55) : vec3(0.95, 0.98, 0.97);
-    cloud *= 0.55 + 0.45 * max(dot(n, LIGHT), 0.0) + lightning() * 0.8;
-    surface.rgb = mix(surface.rgb, cloud * surface.a, density);
+    // Von der Oberfläche Richtung Licht bis zur Wolkenhülle: dort entscheidet sich der Schatten
+    float nl = dot(n, LIGHT);
+    float along = -nl + sqrt(nl * nl + CLOUD_RADIUS * CLOUD_RADIUS - 1.0);
+    vec3 shell = normalize(n + LIGHT * along);
+    float shadow = cloudDensity(rotateY(shell, -uCloudAngle), cover);
+    surface.rgb *= 1.0 - 0.5 * shadow;
   }
 
   if (isWeather(2.0)) {
     surface.rgb = mix(surface.rgb, vec3(0.75, 0.85, 0.8) * surface.a, 0.35 * uIntensity);
   }
   return surface;
-}
-
-// Regenstreifen: schräg, schnell, in Spalten mit Zufallsversatz
-float rainLayer(vec2 p, float cell, float speed, float seed) {
-  vec2 q = vec2(p.x + p.y * 0.25, p.y);
-  float column = floor(q.x / cell);
-  vec3 rnd = hash33(vec3(column, seed, 1.0));
-  if (rnd.x > 0.35 + 0.6 * uIntensity) return 0.0;
-  float along = fract((q.y + uTime * speed * (0.8 + 0.4 * rnd.y)) / 0.6 + rnd.z);
-  float streak = smoothstep(0.0, 0.05, along) * (1.0 - smoothstep(0.12, 0.2, along));
-  float across = abs(fract(q.x / cell) - 0.5) * cell;
-  return streak * (1.0 - smoothstep(0.0, 0.006, across));
-}
-
-// Schneeflocken: langsam, leicht pendelnd
-float snowLayer(vec2 p, float cell, float speed, float seed) {
-  vec2 q = p + vec2(0.0, uTime * speed);
-  vec2 id = floor(q / cell);
-  vec3 rnd = hash33(vec3(id, seed));
-  if (rnd.z > 0.25 + 0.6 * uIntensity) return 0.0;
-  vec2 center = (id + 0.2 + 0.6 * rnd.xy) * cell;
-  center.x += sin(uTime * 1.3 + rnd.x * 6.3) * cell * 0.15;
-  float size = cell * (0.08 + 0.06 * rnd.y);
-  return 1.0 - smoothstep(size * 0.4, size, length(q - center));
-}
-
-// Nebel-Dunst, Niederschlag und Blitz liegen vor der ganzen Szene
-vec4 weatherInFront(vec4 color, vec2 p, float r) {
-  float fade = 1.0 - smoothstep(uExtent - 0.4, uExtent, r);
-  if (fade <= 0.0) return color;
-
-  if (isWeather(2.0)) {
-    float haze = 0.3 * uIntensity * exp(-max(r - 1.0, 0.0) * 4.0) * (1.0 - smoothstep(1.0, 1.4, r));
-    color += vec4(vec3(0.75, 0.85, 0.8) * haze, haze) * (1.0 - color.a);
-  }
-
-  if (uMotion < 0.5) return color;
-
-  float drops = 0.0;
-  vec3 tint = vec3(0.7, 0.85, 0.95);
-  if (isWeather(3.0) || isWeather(5.0)) {
-    drops = rainLayer(p, 0.045, 3.2, 1.0) * 0.55 + rainLayer(p * 1.3 + 7.0, 0.04, 2.4, 2.0) * 0.3;
-  } else if (isWeather(4.0)) {
-    drops = snowLayer(p, 0.16, 0.25, 1.0) * 0.9 + snowLayer(p * 1.4 + 3.0, 0.14, 0.17, 2.0) * 0.6;
-    tint = vec3(0.95, 1.0, 0.98);
-  }
-  drops *= fade;
-  color = vec4(tint * drops, drops) + color * (1.0 - drops);
-
-  float flash = lightning() * 0.35 * fade * (1.0 - smoothstep(0.6, uExtent, r));
-  return color + vec4(vec3(0.75, 0.85, 0.9) * flash, flash) * (1.0 - color.a * 0.5);
 }
 
 // Dünnes Lodern auf der Vorderseite: hängt an der Oberfläche und züngelt nach oben.
@@ -448,7 +412,83 @@ vec4 scene(vec2 p, float r) {
 void main() {
   vec2 p = planetCoord();
   float r = length(p);
-  gl_FragColor = weatherInFront(scene(p, r), p, r);
+  gl_FragColor = scene(p, r);
+}
+`
+
+// Wetter vor Planet und Camp (vormultipliziertes RGBA, wird darüber geblendet):
+// Wolkenhülle, Nebel-Dunst, Niederschlag und Blitz
+const WEATHER_SHADER = `
+// Regenstreifen: schräg, schnell, in Spalten mit Zufallsversatz
+float rainLayer(vec2 p, float cell, float speed, float seed) {
+  vec2 q = vec2(p.x + p.y * 0.25, p.y);
+  float column = floor(q.x / cell);
+  vec3 rnd = hash33(vec3(column, seed, 1.0));
+  if (rnd.x > 0.35 + 0.6 * uIntensity) return 0.0;
+  float along = fract((q.y + uTime * speed * (0.8 + 0.4 * rnd.y)) / 0.6 + rnd.z);
+  float streak = smoothstep(0.0, 0.05, along) * (1.0 - smoothstep(0.12, 0.2, along));
+  float across = abs(fract(q.x / cell) - 0.5) * cell;
+  return streak * (1.0 - smoothstep(0.0, 0.006, across));
+}
+
+// Schneeflocken: langsam, leicht pendelnd
+float snowLayer(vec2 p, float cell, float speed, float seed) {
+  vec2 q = p + vec2(0.0, uTime * speed);
+  vec2 id = floor(q / cell);
+  vec3 rnd = hash33(vec3(id, seed));
+  if (rnd.z > 0.25 + 0.6 * uIntensity) return 0.0;
+  vec2 center = (id + 0.2 + 0.6 * rnd.xy) * cell;
+  center.x += sin(uTime * 1.3 + rnd.x * 6.3) * cell * 0.15;
+  float size = cell * (0.08 + 0.06 * rnd.y);
+  return 1.0 - smoothstep(size * 0.4, size, length(q - center));
+}
+
+// Wolkendecke auf der Hülle über dem Planeten; ragt am Rand über die Kugel hinaus
+vec4 clouds(vec2 p, float r) {
+  float cover = cloudCover();
+  if (cover <= 0.0 || r >= CLOUD_RADIUS) return vec4(0.0);
+  vec3 n = vec3(p, sqrt(CLOUD_RADIUS * CLOUD_RADIUS - r * r)) / CLOUD_RADIUS;
+  float density = cloudDensity(rotateY(n, -uCloudAngle), cover);
+  density *= 1.0 - smoothstep(CLOUD_RADIUS - 0.03, CLOUD_RADIUS, r);
+  vec3 cloud = uWeather > 2.5 ? vec3(0.5, 0.56, 0.55) : vec3(0.95, 0.98, 0.97);
+  cloud *= 0.55 + 0.45 * max(dot(n, LIGHT), 0.0) + lightning() * 0.8;
+  return vec4(cloud * density, density);
+}
+
+// Nebel-Dunst, Niederschlag und Blitz liegen vor der ganzen Szene
+vec4 weatherInFront(vec4 color, vec2 p, float r) {
+  float fade = 1.0 - smoothstep(uExtent - 0.4, uExtent, r);
+  if (fade <= 0.0) return color;
+  // Deckung durch Wolken und Kugel: Dunst und Blitz hellen vor allem außerhalb auf
+  float planetCover = 1.0 - smoothstep(1.0 - uPixel, 1.0, r);
+  float covered = max(color.a, planetCover);
+
+  if (isWeather(2.0)) {
+    float haze = 0.3 * uIntensity * exp(-max(r - 1.0, 0.0) * 4.0) * (1.0 - smoothstep(1.0, 1.4, r));
+    color += vec4(vec3(0.75, 0.85, 0.8) * haze, haze) * (1.0 - covered);
+  }
+
+  if (uMotion < 0.5) return color;
+
+  float drops = 0.0;
+  vec3 tint = vec3(0.7, 0.85, 0.95);
+  if (isWeather(3.0) || isWeather(5.0)) {
+    drops = rainLayer(p, 0.045, 3.2, 1.0) * 0.55 + rainLayer(p * 1.3 + 7.0, 0.04, 2.4, 2.0) * 0.3;
+  } else if (isWeather(4.0)) {
+    drops = snowLayer(p, 0.16, 0.25, 1.0) * 0.9 + snowLayer(p * 1.4 + 3.0, 0.14, 0.17, 2.0) * 0.6;
+    tint = vec3(0.95, 1.0, 0.98);
+  }
+  drops *= fade;
+  color = vec4(tint * drops, drops) + color * (1.0 - drops);
+
+  float flash = lightning() * 0.35 * fade * (1.0 - smoothstep(0.6, uExtent, r));
+  return color + vec4(vec3(0.75, 0.85, 0.9) * flash, flash) * (1.0 - covered * 0.5);
+}
+
+void main() {
+  vec2 p = planetCoord();
+  float r = length(p);
+  gl_FragColor = weatherInFront(clouds(p, r), p, r);
 }
 `
 
@@ -491,7 +531,8 @@ void main() {
 
   vec3 light = normalize(vec3(-0.35, 0.55, 0.8));
   float diffuse = max(dot(normalize(vNormal), light), 0.0);
-  vec3 col = vColor * (0.3 + 0.75 * diffuse) + vec3(0.02, 0.08, 0.05);
+  // Das Licht steht am Camp fast senkrecht – etwas mehr Umgebungslicht, damit Wände nicht schwarz werden
+  vec3 col = vColor * (0.4 + 0.65 * diffuse) + vec3(0.02, 0.08, 0.05);
   gl_FragColor = vec4(col, 1.0);
 }
 `
@@ -587,15 +628,17 @@ export function createPlanetRenderer(
   const pending = [
     createProgram(gl, COMMON + BAKE_SHADER),
     createProgram(gl, COMMON + NORMAL_SHADER),
-    createProgram(gl, COMMON + FRAME_SHADER),
+    createProgram(gl, COMMON + WEATHER_COMMON + FRAME_SHADER),
     createProgram(gl, CAMP_FRAGMENT_SHADER, CAMP_VERTEX_SHADER, ['aPosition', 'aNormal', 'aColor']),
+    createProgram(gl, COMMON + WEATHER_COMMON + WEATHER_SHADER),
   ]
   if (pending.some((p) => !p)) return null
-  const [bake, normal, frame, camp] = pending as PendingProgram[]
+  const [bake, normal, frame, camp, weatherPass] = pending as PendingProgram[]
   const bakeProgram = bake!.program
   const normalProgram = normal!.program
   const frameProgram = frame!.program
   const campProgram = camp!.program
+  const weatherProgram = weatherPass!.program
 
   // Ein Dreieck, das den ganzen Canvas abdeckt
   const buffer = gl.createBuffer()
@@ -646,6 +689,10 @@ export function createPlanetRenderer(
     gl.useProgram(campProgram)
     gl.uniform1f(at(campProgram, 'uExtent'), EXTENT)
 
+    gl.useProgram(weatherProgram)
+    gl.uniform1f(at(weatherProgram, 'uMotion'), options.reducedMotion ? 0 : 1)
+    gl.uniform1f(at(weatherProgram, 'uExtent'), EXTENT)
+
     return {
       normalTexel: at(normalProgram, 'uTexel'),
       frameTime: at(frameProgram, 'uTime'),
@@ -655,6 +702,11 @@ export function createPlanetRenderer(
       frameWeather: at(frameProgram, 'uWeather'),
       frameIntensity: at(frameProgram, 'uIntensity'),
       campAngle: at(campProgram, 'uAngle'),
+      weatherTime: at(weatherProgram, 'uTime'),
+      weatherCloudAngle: at(weatherProgram, 'uCloudAngle'),
+      weatherPixel: at(weatherProgram, 'uPixel'),
+      weatherWeather: at(weatherProgram, 'uWeather'),
+      weatherIntensity: at(weatherProgram, 'uIntensity'),
     }
   }
 
@@ -791,6 +843,20 @@ export function createPlanetRenderer(
       gl.enable(gl.DEPTH_TEST)
       gl.drawArrays(gl.TRIANGLES, 0, campVertices)
       gl.disable(gl.DEPTH_TEST)
+
+      // Wetter zuletzt, damit Wolken und Niederschlag auch vor den Zelten liegen
+      if (weather.id === 0) return
+      gl.useProgram(weatherProgram)
+      gl.uniform1f(u.weatherTime, options.reducedMotion ? 0 : time)
+      gl.uniform1f(u.weatherCloudAngle, angles.clouds)
+      gl.uniform1f(u.weatherPixel, (3 * EXTENT) / size)
+      gl.uniform1f(u.weatherWeather, weather.id)
+      gl.uniform1f(u.weatherIntensity, weather.intensity)
+      useFullscreenTriangle()
+      gl.enable(gl.BLEND)
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA) // vormultipliziert
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+      gl.disable(gl.BLEND)
     },
 
     dispose() {
@@ -803,6 +869,7 @@ export function createPlanetRenderer(
       gl.deleteProgram(normalProgram)
       gl.deleteProgram(frameProgram)
       gl.deleteProgram(campProgram)
+      gl.deleteProgram(weatherProgram)
     },
   }
 }
